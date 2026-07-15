@@ -2,6 +2,75 @@
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
 
+/* ── Sangria theme ───────────────────────────────────────────────────────────
+   A wine palette: berry-red primary, warm rose-tinted neutrals, aubergine dark
+   mode, and a citrus-amber accent used sparingly. Overrides Fumadocs' fd tokens
+   (see fumadocs-ui/css/lib/default-colors.css for the full set). */
+:root {
+  --color-fd-background: hsl(20, 40%, 98.4%);
+  --color-fd-foreground: hsl(345, 24%, 14%);
+  --color-fd-muted: hsl(20, 26%, 95.4%);
+  --color-fd-muted-foreground: hsl(345, 11%, 41%);
+  --color-fd-popover: hsl(24, 44%, 99.2%);
+  --color-fd-popover-foreground: hsl(345, 24%, 14%);
+  --color-fd-card: hsl(24, 44%, 99.3%);
+  --color-fd-card-foreground: hsl(345, 24%, 14%);
+  --color-fd-border: hsla(345, 28%, 78%, 0.55);
+  --color-fd-primary: hsl(344, 64%, 43%);
+  --color-fd-primary-foreground: hsl(20, 44%, 98.5%);
+  --color-fd-secondary: hsl(20, 32%, 94.2%);
+  --color-fd-secondary-foreground: hsl(345, 30%, 20%);
+  --color-fd-accent: hsla(344, 56%, 88%, 0.5);
+  --color-fd-accent-foreground: hsl(345, 46%, 30%);
+  --color-fd-ring: hsl(344, 64%, 47%);
+
+  /* Custom brand accents (used on the landing page). */
+  --color-brand-citrus: hsl(34, 92%, 52%);
+}
+
+.dark {
+  --color-fd-background: hsl(345, 26%, 7.6%);
+  --color-fd-foreground: hsl(20, 22%, 92%);
+  --color-fd-muted: hsl(345, 18%, 14.2%);
+  --color-fd-muted-foreground: hsla(20, 15%, 74%, 0.85);
+  --color-fd-popover: hsl(345, 22%, 10.2%);
+  --color-fd-popover-foreground: hsl(20, 20%, 91%);
+  --color-fd-card: hsl(345, 22%, 9.6%);
+  --color-fd-card-foreground: hsl(20, 22%, 96%);
+  --color-fd-border: hsla(344, 34%, 60%, 0.16);
+  --color-fd-primary: hsl(343, 84%, 66%);
+  --color-fd-primary-foreground: hsl(345, 42%, 9%);
+  --color-fd-secondary: hsl(345, 18%, 14.2%);
+  --color-fd-secondary-foreground: hsl(20, 20%, 92%);
+  --color-fd-accent: hsla(344, 42%, 46%, 0.22);
+  --color-fd-accent-foreground: hsl(20, 22%, 93%);
+  --color-fd-ring: hsl(343, 84%, 66%);
+
+  --color-brand-citrus: hsl(36, 90%, 60%);
+}
+
+/* Warm display serif (Fraunces) for the wordmark, hero, and page titles. */
+.font-display {
+  font-family: var(--font-display), Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto;
+}
+
+/* Docs page titles pick up the display serif — ties the brand through the docs.
+   #nd-page is the <article>; its first h1 is the page title. */
+#nd-page h1:first-of-type {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background-color: color-mix(in oklab, var(--color-fd-primary) 26%, transparent);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 html {
   scrollbar-gutter: stable;
 }
