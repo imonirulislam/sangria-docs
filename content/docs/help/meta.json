@@ -1,0 +1,21 @@
+{
+  "title": "Help Center",
+  "root": true,
+  "icon": "LifeBuoy",
+  "pages": [
+    "index",
+    "getting-started",
+    "workspaces",
+    "channels",
+    "direct-messages",
+    "messages",
+    "huddles",
+    "notifications",
+    "search",
+    "people-and-groups",
+    "profile-and-status",
+    "integrations",
+    "account-and-security",
+    "apps-desktop-mobile"
+  ]
+}

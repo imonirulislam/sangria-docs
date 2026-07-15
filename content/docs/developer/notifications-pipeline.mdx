@@ -1,0 +1,106 @@
+---
+title: Notifications pipeline
+description: The durable outbox and workpool fan-out that turns one message into many notifications.
+---
+
+Sending a message can notify hundreds of people, but the mutation that sends it must
+stay fast and transactional. The pipeline splits the two: the producer writes **one**
+outbox row and returns; a worker drains it off the request path. The code lives under
+`convex/notifications/`.
+
+## Producer — one row, then return
+
+A message or reaction mutation calls `enqueueNotificationEvent`:
+
+```ts
+await enqueueNotificationEvent(ctx, {
+  kind,            // "channel_message" | "dm_message" | "thread_reply" | "reaction"
+  messageId,
+  workspaceId,
+  senderMemberId,
+  reactionValue,   // only for kind === "reaction"
+});
+```
+
+It inserts a single `notification_events` row with `status: "pending"` and schedules
+`internal.notifications.notificationEvents.process`. The mutation does no
+recipient work, so it stays **O(1)** no matter how large the channel is.
+
+## Worker — resolve, deliver, chunk
+
+`process` resolves recipients by `kind` and delivers to each. It handles two shapes:
+
+- **Bounded kinds** (`dm_message`, `thread_reply`) touch a small, known set of
+  recipients and finish in a single pass.
+- **Unbounded kinds** (`channel_message`, and channel `reaction`) fan out to a whole
+  channel and are chunked.
+
+**@mentions run once, up front.** Before any chunking, if `!event.extrasDone` and the
+kind isn't `reaction`, the worker calls `sendMentionNotifications` to notify anyone
+`@`-mentioned (resolving the channel context, since a thread reply inherits its
+parent's channel). Mentioned users are then excluded from the generic
+"sent a message" pass so they aren't notified twice.
+
+**Channel fan-out is chunked.** The worker paginates `channel_members` in batches of
+`CHANNEL_BATCH = 50` using the event's `cursor`. If the page isn't the last, it sets
+`status: "processing"`, saves `page.continueCursor`, and re-schedules itself; on the
+final page it sets `status: "done"`. Within each recipient of a `channel_message`:
+
+- **Highlight-word matches are per-recipient, inside this loop.** For each recipient
+  the worker reads their `notification_preferences.highlightWords` and calls
+  `matchHighlightWord`. A hit produces a mention-class `keyword` notification **in
+  place of** that recipient's generic `channel_message` row.
+
+## `shouldDeliver` — the single gate
+
+Every delivery goes through `shouldDeliver(ctx, { userId, workspaceId, type, channelId })`
+before anything is written. In one place it:
+
+- **Skips bots** — a recipient with `isBot` returns `false`. This is the only bot
+  guard needed anywhere in fan-out.
+- **Respects quiet hours** — evaluated in the recipient's own timezone (fails open if
+  the runtime can't convert the timezone, rather than silently suppressing).
+- **Respects category preferences** — messages / mentions / reactions, with `keyword`
+  treated as mention-class.
+- **Respects the per-channel preference and mutes** — `notificationPreference` of
+  `none`, a `mentions`-only channel for a non-mention, `isMuted`, and a live
+  `mutedUntil` all suppress delivery.
+
+When it passes, delivery writes an in-app `notifications` row and calls
+`enqueueUserPush`.
+
+## Push delivery — a retrying workpool
+
+`enqueueUserPush` looks up the user's active `push_subscriptions` and enqueues one
+task per device into `pushDeliveryPool` (a Convex Workpool). The pool caps
+`maxParallelism` and retries failed deliveries with exponential backoff; dead
+subscriptions are deactivated rather than retried. Enqueuing happens inside the
+worker's transaction, so it's atomic with the in-app write.
+
+## The stuck-event sweep
+
+A scheduled mutation that throws is **not** auto-retried, which would strand its
+event forever. The `sweepStuckNotificationEvents` cron (every 5 min) runs
+`sweepStuckEvents`, which re-enqueues any `pending`/`processing` event whose
+`lastAttemptAt` is older than the cutoff. Events actively chunking keep
+`lastAttemptAt` fresh and are skipped. After `MAX_ATTEMPTS` (5) an event is moved to a
+terminal `failed` status instead of being retried again.
+
+<Callout type="info">
+  The outbox is durable, idempotent, and auditable: every fan-out leaves a
+  `notification_events` row you can inspect, and `process` is safe to re-run.
+</Callout>
+
+## App events reuse the pattern
+
+Outgoing integration events follow a parallel path. `enqueueAppEvent` short-circuits
+to O(1) when no `app_webhook` exists in the channel; otherwise it schedules
+`dispatch`, which resolves the subscribed apps and enqueues signed POSTs into
+`eventDeliveryPool` — the same bounded, retrying workpool shape as push. See
+[Integrations API](/docs/developer/integrations-api).
+
+<Cards>
+  <Card title="Integrations API" href="/docs/developer/integrations-api" description="Incoming webhooks, the bot API, and signed outgoing events." />
+  <Card title="Conventions" href="/docs/developer/conventions" description="The bot-identity model and backend-cost rules." />
+  <Card title="Data model" href="/docs/developer/data-model" description="The notification_events and push_subscriptions tables." />
+</Cards>

@@ -1,0 +1,98 @@
+---
+title: Architecture
+description: How the frontend, Convex backend, media, and shells fit together and how work flows through them.
+---
+
+Sangria is a Next.js frontend over a Convex backend, with LiveKit for realtime
+media. Desktop and mobile are the same deployed web app wrapped in native shells.
+
+## The layers
+
+| Layer | What it is |
+| --- | --- |
+| **Frontend** | Next.js 16 (App Router) + React 19. Local state in `jotai`; URL state in `nuqs`; Tailwind CSS. |
+| **Backend** | [Convex](https://convex.dev) (self-hosted locally): the schema, queries, mutations, actions, HTTP routes, scheduled functions, crons, and components. |
+| **Realtime media** | [LiveKit](https://livekit.io) rooms power huddles; membership is a projection of LiveKit's webhook events. |
+| **Shells** | Electron (desktop), Capacitor (iOS/Android), and a PWA — each wraps the deployed web app rather than reimplementing it. |
+
+The shells share one codebase. Anything platform-specific (native notifications,
+deep links) is a thin adapter over the same Convex API the web app calls.
+
+## Convex primitives
+
+The backend is built from a small set of function types, all defined under
+`convex/`:
+
+- **`query`** — a read. Reactive: it re-runs on the client automatically whenever
+  any document it read changes.
+- **`mutation`** — a transactional write.
+- **`action`** — non-transactional; the only place you may call external services
+  or use `fetch`. An action marked `"use node"` runs in the Node runtime so it can
+  use node modules (e.g. `node:crypto` for HMAC in `apps/eventDelivery.ts`).
+- **`internalQuery` / `internalMutation` / `internalAction`** — the same, but **not**
+  client-callable. Fan-out workers, webhook handlers, and privileged helpers use
+  these. See [Conventions](/docs/developer/conventions#public-vs-internal).
+
+Functions are invoked through generated clients: **`api`** for public functions and
+**`internal`** for internal ones, both in `convex/_generated/`. Server code
+schedules or calls other functions by reference — e.g.
+`internal.notifications.notificationEvents.process`.
+
+<Callout type="warn">
+  Reactive queries re-run on every dependency change, so keep them cheap — index
+  and paginate, never `.collect()` an unbounded set. See
+  [Conventions → Backend cost](/docs/developer/conventions#backend-cost).
+</Callout>
+
+## HTTP routes
+
+Anything that isn't a Convex client call arrives through `convex/http.ts`. Each
+`httpAction` verifies its own auth, then hands off to an internal mutation:
+
+| Route | Purpose |
+| --- | --- |
+| `POST /livekit/webhook` | LiveKit room/participant lifecycle events — the source of truth for huddle presence. Signature is verified in a `"use node"` action, then dispatched to idempotent mutations. |
+| `POST /webhooks/t/<token>` | Incoming integration webhook. The path token authenticates one app posting to one channel. |
+| `POST /api/messages` | Bot API. `Authorization: Bearer <apiToken>` posts as an app's bot to a channel. |
+
+The webhook and bot routes are the [Integrations API](/docs/developer/integrations-api).
+`auth.addHttpRoutes(http)` also mounts the auth provider's own endpoints.
+
+## Background work
+
+Work that shouldn't block a request runs off the request path:
+
+- **Scheduled functions** — `ctx.scheduler.runAfter(delay, fnRef, args)` enqueues a
+  function to run later. The notification producer uses this to keep the triggering
+  mutation O(1); LiveKit webhooks use it to dispatch to mutations.
+- **Crons** (`convex/crons.ts`) — recurring jobs: a presence sweep and inactive-user
+  cleanup (every 5 min), a stuck-notification-event sweep, scheduled-message and
+  "Later" reminder delivery (every minute), expired custom-status cleanup, and a
+  daily per-workspace analytics rollup.
+
+## Convex components
+
+Two Convex components handle work that needs concurrency limits and retries:
+
+- **Rate limiter** — token-bucket and fixed-window limits defined in
+  `convex/shared/rateLimits.ts`. See
+  [Conventions → Rate limiting](/docs/developer/conventions#rate-limiting).
+- **Workpool** — bounded, retrying task pools. `pushDeliveryPool` fans out web-push;
+  `eventDeliveryPool` fans out signed outgoing app events. Both cap
+  `maxParallelism` and retry with exponential backoff.
+
+## How a message flows
+
+1. The client calls the `sendMessage` mutation.
+2. The mutation authorizes the resource, writes the `messages` row, and enqueues a
+   single `notification_events` row plus (if an app is installed) an app-event
+   dispatch — then returns. It never loops recipients.
+3. Scheduled workers resolve recipients, write in-app `notifications`, and hand
+   push + outgoing events to their workpools.
+4. Every subscribed client's reactive queries re-run and the new message appears.
+
+<Cards>
+  <Card title="Data model" href="/docs/developer/data-model" description="The Convex schema, table by table." />
+  <Card title="Notifications pipeline" href="/docs/developer/notifications-pipeline" description="The durable outbox + workpool fan-out." />
+  <Card title="Conventions" href="/docs/developer/conventions" description="The shared helpers and the Definition of Done." />
+</Cards>

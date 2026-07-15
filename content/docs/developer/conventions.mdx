@@ -1,0 +1,90 @@
+---
+title: Conventions
+description: The shared helpers you're expected to reuse, and the per-feature checklist.
+---
+
+Most "new" boilerplate already has a home. Reach for these before writing your own —
+the linter and reviewers assume you did.
+
+## Reuse these — don't reinvent them
+
+| Need | Use | Never |
+| --- | --- | --- |
+| Require a signed-in user | `requireIdentity(ctx)` → returns the user id or throws | hand-write `getAuthUserId` + `if (!userId) throw` |
+| Optional / soft auth | `getAuthUserId(ctx)` then `if (!userId) return …` | throw on a read that should degrade |
+| Membership / permission | `requireMember`, `requirePermission`, `canReadResource`, `canManageChannel` | re-query the member row inline |
+| Build an in-app URL | `routes.*` e.g. `routes.channel.view(wid, cid)` | hand-write `` `/workspace/${…}` `` (ESLint blocks it) |
+| A fixed set of string values | add to `convex/shared/enums.ts` (`as const` → validator + type) | scatter string literals |
+| Rate-limit an endpoint | `rateLimiter.limit(ctx, "<name>", { key, throws: true })` + a def in `shared/rateLimits.ts` | leave abuse-prone writes open |
+| Return a user to clients | `publicUserFields` (`shared/publicUser`) | spread the whole user doc (leaks auth fields) |
+
+All of these live under `convex/shared/`.
+
+## Authorization
+
+Authentication (who are you) is not authorization (are you allowed). Gate the
+**resource**, not just the session — a logged-in user is not automatically an
+allowed one.
+
+- `requireIdentity(ctx)` — throws if unauthenticated; returns the user id.
+- `getAuthUserId(ctx)` — soft: returns the id or `null` for reads that should degrade.
+- `requireMember(ctx, workspaceId)` / `getMember(...)` — workspace membership. A
+  **deactivated** member (`deactivatedAt != null`) is treated as a non-member.
+- `requirePermission(ctx, workspaceId, "workspace.edit")` — role/permission gate;
+  returns `{ member }`.
+- `canReadResource` / `assertCanRead(ctx, userId, channelId, conversationId)` — can
+  this user read this channel or DM.
+- `isPrimaryOwner(member, workspace)` — the workspace creator; only they can transfer
+  ownership or delete the workspace.
+
+## Public vs internal
+
+`query` / `mutation` / `action` are **client-callable**. Anything that fans out,
+runs privileged logic, or is only called by other server code must be
+`internalQuery` / `internalMutation` / `internalAction`.
+
+## Rate limiting
+
+If an endpoint writes durable state, fans out notifications, calls an external
+service, or mints URLs/tokens, it needs a limit. Skip chatty reads, presence, and
+autosave. Two shapes (see `shared/rateLimits.ts`):
+
+- **Token bucket** — smooth with a burst allowance; for chatty actions
+  (`sendMessage`, `toggleReaction`, `incomingWebhook`).
+- **Fixed window** — a hard cap per window; for expensive/abusable actions
+  (`failedSignIn`, `createWorkspace`, `startHuddle`).
+
+## Backend cost
+
+Reactive queries re-run on every dependency change, so keep them cheap.
+
+- No unbounded `.collect()` — use an index + `.paginate()`.
+- No N+1 `ctx.db.get` in loops.
+- Fan-out is chunked through the durable outbox — see
+  [Notifications pipeline](/docs/developer/notifications-pipeline).
+- Return only the fields the client needs.
+
+## The bot-identity model
+
+An integration ("app") is modeled as a synthetic `users` row (`isBot: true`) plus a
+`members` row. Because a bot is a real member, author resolution (name, avatar) works
+unchanged everywhere it posts. Bots are excluded from rosters, counts, mentions, and
+never accrue notifications (a single guard in `shouldDeliver`). See
+[Integrations API](/docs/developer/integrations-api).
+
+## Definition of Done
+
+Every new backend function:
+
+- **Auth** — `requireIdentity` (throwing) or `getAuthUserId` + soft return.
+- **Authorization** — gate the resource, and verify every incoming id belongs to the
+  caller's workspace (tenant boundary).
+- **Public vs internal** — the correct callable boundary.
+- **Rate limit** — where it writes durable state / fans out / calls out / mints tokens.
+- **Tests** — a `convex-test` test covering *anonymous rejected → non-member/cross-tenant
+  rejected → happy path → edge cases*. See [Testing](/docs/developer/testing).
+
+<Callout type="warn">
+  New Convex functions 404 at runtime until you push them with `npx convex dev --once`
+  — even when `tsc` and tests pass. Push after adding functions.
+</Callout>

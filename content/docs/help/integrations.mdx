@@ -1,0 +1,86 @@
+---
+title: Integrations
+description: Connect apps that post to channels and receive events, and manage them as an admin.
+---
+
+An **integration** (an app) posts to channels as a bot with its own name,
+description, and icon. Apps are how you wire Sangria to your other tools — alerts,
+deploy notices, ticket updates — and how those tools react to what happens in chat.
+Only admins manage integrations, in **Customize workspace → Integrations**.
+
+<Callout title="Admins only">
+  Creating, editing, and removing apps is an admin-only action. Every integration
+  change is recorded in the [audit log](/docs/help/account-and-security).
+</Callout>
+
+## What an app looks like
+
+Each app has a name, a description, and an icon, and it posts as a bot rather than
+as a person. Hovering an app's name anywhere in Sangria shows a card describing it
+and listing the channels it posts to.
+
+Adding or removing an app from a channel posts a system message in that channel, so
+members can see when a bot joins or leaves.
+
+## Incoming webhooks
+
+An incoming webhook lets another tool push messages *into* Sangria.
+
+1. Add the app to a channel. Each app gets a webhook URL **per channel** it's added
+   to.
+2. Have your other tool send an HTTP `POST` to that URL with a JSON body:
+
+   ```json
+   { "text": "Deploy finished — v2.4.1 is live" }
+   ```
+3. The message appears in that channel, posted as the bot.
+
+This is a good fit for alerts from other tools — monitoring, CI, or a scheduled job
+that just needs to drop a line into one channel. Because the URL is tied to a single
+channel, you can add the app to more channels to get a separate URL for each.
+
+## Bot API token
+
+An app also has a bearer **API token**. Use it to post to any channel the app is
+in, without a per-channel URL. Send a `POST` to `/api/messages` with an
+`Authorization` header and a JSON body naming the channel:
+
+```
+POST /api/messages
+Authorization: Bearer <token>
+
+{ "channel": "<name-or-id>", "text": "Backup completed" }
+```
+
+<Callout type="warn" title="Treat the token like a password">
+  Anyone with the token can post to every channel the app belongs to. Store it as a
+  secret in the sending tool, never in client code or a public repo.
+</Callout>
+
+## Outgoing event subscriptions
+
+Event subscriptions let an app react *to* what happens in Sangria.
+
+1. Give the app a public **https** URL to receive events. Internal or localhost
+   addresses are rejected.
+2. Choose the event types you care about — **message** and **reaction**.
+3. Whenever a subscribed event happens in a channel the app is in, Sangria sends a
+   signed JSON `POST` to your URL.
+
+Your receiver should verify each request before trusting it:
+
+- **`X-Webhook-Signature`** — an HMAC-SHA256 signature of the payload, computed with
+  the app's signing secret. Recompute it and compare.
+- **`X-Webhook-Timestamp`** — the time the event was sent. Check it alongside the
+  signature when you validate the request.
+
+## Exact request and response details
+
+This page is the overview. For precise request and response shapes, headers, and
+signature verification, see the developer reference.
+
+<Cards>
+  <Card title="Integrations API" href="/docs/developer/integrations-api" description="Exact request/response details for webhooks, the bot API, and events." />
+  <Card title="Channels" href="/docs/help/channels" description="Add and remove apps in the channels they post to." />
+  <Card title="Account & security" href="/docs/help/account-and-security" description="Review the audit log of integration changes." />
+</Cards>

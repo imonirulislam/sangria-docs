@@ -1,0 +1,132 @@
+---
+title: Data model
+description: The Convex schema grouped by feature area, with the purpose of each table.
+---
+
+The schema lives in `convex/schema.ts`. Every table is workspace-scoped (most carry
+a `workspaceId`), and enums that drive the validators come from
+`convex/shared/enums.ts`. Tables are grouped below by feature area.
+
+## Identity
+
+| Table | Purpose |
+| --- | --- |
+| `users` | Auth account + profile (display name, title, timezone, …). `isBot: true` marks the synthetic user backing an integration. |
+| `members` | Workspace membership: `role`, `joinedAt`, and `deactivatedAt` (soft-delete — the row stays so past messages keep an author). |
+| `user_status` | Per-user online/away/offline presence within a workspace. |
+
+## Workspace
+
+| Table | Purpose |
+| --- | --- |
+| `workspaces` | The tenant: `name`, `joinCode`, `description`, `icon`, and `userId` (the primary owner). |
+| `workspace_permissions` | Per-workspace policy layered on the role matrix (who can create channels, edit-window, etc.). |
+| `workspace_channel_settings` | Admin channel-naming policy: allowed name prefixes and max length. |
+
+## Channels
+
+| Table | Purpose |
+| --- | --- |
+| `channels` | A channel: `name`, `isPrivate`, `isDefault`, `description`, `topic`. |
+| `channel_members` | Membership + per-channel settings: `role`, `notificationPreference` (`all` / `mentions` / `none`), `isMuted`, `mutedUntil`, `isActive`. |
+
+## Direct messages
+
+| Table | Purpose |
+| --- | --- |
+| `conversations` | A DM or group DM: `isGroup`, optional `name` and `topic`. |
+| `conversation_members` | Who is in each conversation; carries the per-member `isMuted` flag. |
+
+## Messages
+
+| Table | Purpose |
+| --- | --- |
+| `messages` | The message: `body` (a Quill delta), `searchText` (plain-text projection for search), `attachments`, `channelId` or `conversationId`, `parentMessageId` (threads), `systemGenerated`, `forwardedFrom`, `hiddenUnfurls`, and huddle fields. |
+| `reactions` | An emoji reaction on a message (`value`). |
+| `pinned_messages` | A message pinned in a channel/conversation (channel + conversation ids denormalized from the message). |
+| `saved_messages` | A "Later" item: a saved message, a message reminder, or a standalone reminder (`status`, `remindAt`, `note`). |
+| `drafts` | Auto-saved unsent drafts, one per target (channel / DM / thread). |
+| `scheduled_messages` | "Send later" messages, delivered by a cron at `scheduledFor`. |
+| `link_previews` | Cached OpenGraph preview data for external URLs, keyed by `url`. |
+
+## Notifications
+
+| Table | Purpose |
+| --- | --- |
+| `notifications` | An in-app notification row for a user (`type`, `content`, `isRead`). |
+| `notification_events` | The fan-out **outbox** — one row per triggering message/reaction; a worker drains it. See [Notifications pipeline](/docs/developer/notifications-pipeline). |
+| `notification_preferences` | Per-user, per-workspace preferences: categories, quiet hours (+ timezone), and `highlightWords`. |
+| `push_subscriptions` | One web-push endpoint per device for a user in a workspace. |
+
+## Presence & status
+
+| Table | Purpose |
+| --- | --- |
+| `workspace_statuses` | The workspace's list of preset custom statuses. |
+| `users_workspace_status` | A user's current custom status in a workspace (text, emoji value, optional `expiresAt`). |
+
+## User groups
+
+| Table | Purpose |
+| --- | --- |
+| `user_groups` | A named, `@`-mentionable group of members (unique `handle` per workspace). |
+| `user_group_members` | Group membership join table. |
+| `user_group_channels` | Channels a group's members are auto-joined to. |
+
+## Custom emoji
+
+| Table | Purpose |
+| --- | --- |
+| `custom_emoji` | Workspace custom emoji, referenced as `:name:` in messages and reactions. |
+
+## Integrations
+
+| Table | Purpose |
+| --- | --- |
+| `apps` | A workspace integration: `botUserId` + `botMemberId` (its bot identity), `apiToken`, `eventUrl`, `signingSecret`, and subscribed `eventTypes`. |
+| `app_webhooks` | One incoming webhook = one app posting to one channel, authenticated by a per-channel `token`. |
+
+## Sidebar & preferences
+
+| Table | Purpose |
+| --- | --- |
+| `sidebar_sections` | A member's custom sidebar sections (personal, per-member). |
+| `sidebar_section_items` | Which channel/conversation a member filed into a section, and its order. |
+| `users_workspace_preferences` | Per-member workspace preferences (e.g. `theme`). |
+
+## Huddles
+
+| Table | Purpose |
+| --- | --- |
+| `huddles` | A live huddle: LiveKit `roomId`, participants, and invited users. |
+| `huddle_members` | Current membership of a live huddle. |
+| `huddle_history` | A persisted record of each huddle after it ends (live rows are deleted on teardown). |
+
+## Security & analytics
+
+| Table | Purpose |
+| --- | --- |
+| `login_events` | Per-user sign-in history: `method`, `success`, `device`, `ip`, `location`. |
+| `audit_logs` | Append-only security/admin actions; actor and target names denormalized point-in-time. |
+| `analytics_daily` | Daily per-workspace metric rollups (one row per workspace × date × metric). |
+
+## Conventions across the schema
+
+- **Soft-delete** — a removed member is kept (`members.deactivatedAt`), and a
+  left channel keeps its row (`channel_members.isActive: false`), so history still
+  renders with an author.
+- **Denormalized join tables** — membership (`channel_members`,
+  `conversation_members`, `user_group_members`) is normalized so "my channels" is an
+  indexed lookup instead of a scan, avoiding N+1 reads.
+- **Search projection** — `messages.searchText` is a plain-text projection of the
+  Quill `body`, so full-text search doesn't parse deltas at query time.
+- **Enums drive validators** — a fixed set of values (roles, statuses, event kinds)
+  is declared once in `convex/shared/enums.ts` as both a validator and a type; the
+  schema imports the validator. See
+  [Conventions](/docs/developer/conventions#reuse-these--dont-reinvent-them).
+
+<Cards>
+  <Card title="Conventions" href="/docs/developer/conventions" description="Enums, authz helpers, and backend-cost rules." />
+  <Card title="Notifications pipeline" href="/docs/developer/notifications-pipeline" description="How notification_events is drained." />
+  <Card title="Architecture" href="/docs/developer/architecture" description="How the schema fits the rest of the stack." />
+</Cards>

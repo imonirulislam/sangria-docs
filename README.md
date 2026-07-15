@@ -1,45 +1,48 @@
-# sangria-docs
+# Sangria docs
 
-This is a Next.js application generated with
-[Create Fumadocs](https://github.com/fuma-nama/fumadocs).
+The documentation site for **Sangria** — a team-chat workspace. Built with
+[Next.js](https://nextjs.org) + [Fumadocs](https://fumadocs.dev). Content is MDX.
 
-Run development server:
+Two sections, switchable from the sidebar:
+
+- **Help Center** (`content/docs/help`) — end-user guides.
+- **Developer** (`content/docs/developer`) — architecture, data model, and conventions.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-pnpm dev
-# or
-yarn dev
+bun install
+bun run dev      # http://localhost:3000 (redirects /docs → /docs/help)
+bun run build    # production build (also validates every MDX page)
 ```
 
-Open http://localhost:3000 with your browser to see the result.
+## Write a page
 
-## Explore
+1. Add an `.mdx` file under `content/docs/help/` or `content/docs/developer/`.
+2. Give it two-field frontmatter:
 
-In the project, you can see:
+   ```mdx
+   ---
+   title: Your Page
+   description: One sentence, ends with a period.
+   ---
+   ```
 
-- `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
-- `lib/layout.shared.tsx`: Shared options for layouts, optional but preferred to keep.
+3. Register it in the section's `meta.json` `pages` array (this controls sidebar order).
+4. In the body, plain Markdown plus `<Callout>` and `<Cards>/<Card>` are available.
+   Internal links are absolute: `/docs/help/<slug>` or `/docs/developer/<slug>`.
 
-| Route                     | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `app/(home)`              | The route group for your landing page and other pages. |
-| `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+## Layout
 
-### Fumadocs MDX
+| Path | What it is |
+| --- | --- |
+| `content/docs/help/` | Help Center pages + `meta.json` (root folder → sidebar tab) |
+| `content/docs/developer/` | Developer pages + `meta.json` (root folder → sidebar tab) |
+| `src/app/(home)` | Landing page |
+| `src/app/docs` | Docs layout + catch-all page |
+| `src/lib/shared.ts` | App name + GitHub repo config |
+| `src/lib/layout.shared.tsx` | Shared nav/layout options |
+| `source.config.ts` | Fumadocs MDX config (frontmatter schema) |
 
-A `source.config.ts` config file has been included, you can customise different options like frontmatter schema.
-
-Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
-
-## Learn More
-
-To learn more about Next.js and Fumadocs, take a look at the following
-resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
-  features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [Fumadocs](https://fumadocs.dev) - learn about Fumadocs
+Search is powered by Orama (local, no external service). Each page also exposes an
+`llms.txt` / Markdown view for LLMs automatically.

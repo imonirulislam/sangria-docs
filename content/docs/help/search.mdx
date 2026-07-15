@@ -1,0 +1,48 @@
+---
+title: Search
+description: Find messages across your workspace with full-text search and filters.
+---
+
+Search runs full-text over the messages you have access to. You only ever see
+messages you can read — search never surfaces content from channels or DMs you're
+not in.
+
+## Run a search
+
+1. Open search from the top of the app and type what you're looking for.
+2. Sangria matches your terms against message text and shows results
+   **newest-first**.
+3. Results are **paginated** — keep scrolling to load older matches.
+
+## Narrow with filters
+
+Type these filters right into the query box, alongside your search terms, to
+scope where Sangria looks:
+
+- **`in:#channel-name`** — limit results to a single channel.
+- **`from:@person`** — only messages sent by that person.
+- **`to:@person`** — only messages in your direct message with that person.
+
+You can combine a filter with search terms — for example,
+`in:#marketing launch date` finds messages containing "launch date" in the
+`marketing` channel.
+
+<Callout title="You only see what you can read">
+  Filters narrow results, they don't unlock anything. Searching
+  `in:#some-private-channel` returns nothing if you're not a member — the same
+  access rules that apply everywhere in Sangria apply to search.
+</Callout>
+
+## Tips
+
+- **Start broad, then filter.** Type a keyword first, then add `from:@person` or
+  `in:#channel-name` to cut the list down.
+- **Looking for a DM?** Use `to:@person` to jump straight into that conversation's
+  history.
+- **Order is fixed.** Results always come back newest-first, so the most recent
+  match is at the top.
+
+<Cards>
+  <Card title="Messages" href="/docs/help/messages" description="Format, edit, react, thread, pin, and save messages." />
+  <Card title="Channels" href="/docs/help/channels" description="Create channels, organize your sidebar, and manage membership." />
+</Cards>

@@ -1,11 +1,11 @@
-export const appName = 'My App';
+export const appName = 'Sangria';
 export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
 
-// fill this with your actual GitHub info, for example:
+// GitHub info for the repo link in the nav.
 export const gitConfig = {
-  user: 'fuma-nama',
-  repo: 'fumadocs',
+  user: 'imonirulislam',
+  repo: 'sangria-docs',
   branch: 'main',
 };

@@ -1,0 +1,37 @@
+---
+title: Developer Docs
+description: Architecture, data model, and conventions for building Sangria.
+---
+
+This section is for people **working on** Sangria. It explains how the app is put
+together, the shared building blocks you're expected to reuse, and the workflow for
+shipping a change safely.
+
+## Stack at a glance
+
+- **Frontend** — Next.js 16 (App Router) + React 19, `jotai` for local state and
+  `nuqs` for URL state, Tailwind CSS.
+- **Backend** — [Convex](https://convex.dev) (self-hosted locally): schema, queries,
+  mutations, actions, HTTP routes, scheduled functions, and components
+  (rate-limiter, workpool).
+- **Realtime media** — [LiveKit](https://livekit.io) powers huddles.
+- **Shells** — Electron (desktop) and Capacitor (iOS/Android), plus a PWA.
+- **Package manager** — `bun`.
+
+## Start here
+
+<Cards>
+  <Card title="Architecture" href="/docs/developer/architecture" description="How the pieces fit and how a request flows." />
+  <Card title="Conventions" href="/docs/developer/conventions" description="The helpers you must reuse — authz, routes, enums, rate limits." />
+  <Card title="Data model" href="/docs/developer/data-model" description="The Convex schema, table by table." />
+  <Card title="Notifications pipeline" href="/docs/developer/notifications-pipeline" description="The durable outbox + workpool fan-out pattern." />
+  <Card title="Integrations API" href="/docs/developer/integrations-api" description="Incoming webhooks, the bot API, and signed outgoing events." />
+  <Card title="Testing & verify" href="/docs/developer/testing" description="The convex-test harness and the pre-commit checklist." />
+</Cards>
+
+<Callout type="warn" title="Definition of Done">
+  Every backend function needs auth, resource-level authorization, the right
+  public/internal boundary, rate limiting where it writes durable state, and a
+  test. See **[Conventions](/docs/developer/conventions)** and
+  **[Testing](/docs/developer/testing)** before opening a PR.
+</Callout>

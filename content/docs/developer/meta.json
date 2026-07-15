@@ -1,0 +1,15 @@
+{
+  "title": "Developer",
+  "root": true,
+  "icon": "Code",
+  "pages": [
+    "index",
+    "architecture",
+    "conventions",
+    "data-model",
+    "notifications-pipeline",
+    "integrations-api",
+    "testing",
+    "contributing"
+  ]
+}

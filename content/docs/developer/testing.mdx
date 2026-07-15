@@ -1,0 +1,100 @@
+---
+title: Testing
+description: The convex-test backend harness, the required coverage order, and the gotchas.
+---
+
+Backend functions are tested with [`convex-test`](https://www.npmjs.com/package/convex-test),
+run under Vitest. The shared harness lives in `test/support.ts` (outside `convex/`
+on purpose — it pulls in `node:async_hooks`, which Convex's bundler would choke
+on). Test files live in `convex/tests/<module>.test.ts`.
+
+## The harness
+
+`test/support.ts` exports:
+
+| Export | Does |
+| --- | --- |
+| `setup(modules)` | Builds a `convexTest` instance and registers the components our mutations use — the rate-limiter and both delivery workpools (`pushDeliveryPool`, `eventDeliveryPool`) — so those enqueues don't throw. |
+| `asUser(t, userId)` | An authed caller (`t.withIdentity` with a subject `getAuthUserId` will read). |
+| `seedWorkspace(t)` | Seeds owner / admin / member / outsider users, a public and a private channel, owner joined to both. Returns their ids. |
+| `seedDirectConversation(t, ws, a, b)` | A 1:1 DM via `conversation_members`. |
+
+Each test file passes **its own** module glob (relative to the file's location):
+
+```ts
+const modules = import.meta.glob("../**/*.ts");
+const newT = () => setup(modules);
+```
+
+## Required coverage order
+
+For every new or changed backend function, cover in this order:
+
+1. **Anonymous rejected** — an unauthenticated caller is turned away.
+2. **Non-member / cross-tenant rejected** — an authed outsider, and a member of a
+   *different* workspace, cannot reach the resource.
+3. **Happy path** — the allowed caller succeeds and state changes as expected.
+4. **Edge cases** — rate limits, idempotency, deactivation, `undefined` fields.
+
+Unit-test pure helpers directly, with no harness (see `pureUnits.test.ts`,
+`safeFetch.test.ts`). Copy `convex/tests/workspaces.test.ts` as the template.
+
+## A skeleton
+
+```ts
+/// <reference types="vite/client" />
+import { describe, expect, test } from "vitest";
+import { api } from "../_generated/api";
+import { setup, asUser, seedWorkspace } from "../../test/support";
+
+const modules = import.meta.glob("../**/*.ts");
+const newT = () => setup(modules);
+
+describe("channels.rename", () => {
+  test("an outsider cannot rename; the owner can", async () => {
+    const t = newT();
+    const s = await seedWorkspace(t);
+
+    await expect(
+      asUser(t, s.outsiderId).mutation(api.channels.channels.rename, {
+        channelId: s.publicChannelId,
+        name: "nope",
+      }),
+    ).rejects.toThrow();
+
+    await asUser(t, s.ownerId).mutation(api.channels.channels.rename, {
+      channelId: s.publicChannelId,
+      name: "renamed",
+    });
+    const channel = await t.run((ctx) => ctx.db.get(s.publicChannelId));
+    expect(channel?.name).toBe("renamed");
+  });
+});
+```
+
+## Gotchas
+
+- **`undefined` serializes to `null`.** Convex drops optional fields, so a field
+  the mutation left unset reads back as `null`, not `undefined` — assert
+  `toBeNull()`.
+- **Scheduled functions do not auto-run.** A `ctx.scheduler.runAfter(...)` inside
+  a mutation is *enqueued*, not executed, during a test. If you need its effects,
+  drive them explicitly — call the internal function directly, exactly as the
+  suite does: `apps.test.ts` invokes `t.mutation(internal.apps.appEvents.dispatch, …)`
+  and `t.mutation(internal.notifications.notificationEvents.process, …)` rather
+  than waiting for the schedule.
+- **A failing test is a fork.** Fix the test *or* the code — never weaken the
+  assertion to make red go green. If the code is wrong, fix the code.
+
+## Running
+
+```bash
+bun run test
+```
+
+Keep the suite green; a red suite blocks a PR.
+
+<Cards>
+  <Card title="Conventions" href="/docs/developer/conventions" description="Definition of Done — what a backend function owes before it ships." />
+  <Card title="Contributing" href="/docs/developer/contributing" description="The full verify-before-you-finish checklist and commit rules." />
+</Cards>

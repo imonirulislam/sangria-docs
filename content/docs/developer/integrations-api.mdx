@@ -1,0 +1,151 @@
+---
+title: Integrations API
+description: Incoming webhooks, the bot posting API, and signed outgoing event subscriptions.
+---
+
+An integration ("app") posts as a real workspace member and can subscribe to a
+feed of signed events. The identity model is described in
+[Conventions](/docs/developer/conventions); this page is the wire reference for
+the three surfaces: **incoming webhooks**, the **bot API**, and **outgoing events**.
+
+## Bot identity
+
+An app is a synthetic `users` row (`isBot: true`) plus a `members` row, created
+together in `apps.create`. Because the bot is a normal member, author resolution
+(name, avatar) works unchanged wherever it posts. Every posting surface writes a
+`messages` row authored by `app.botMemberId` and fans out through the same
+notification path as a human message. Bots are excluded from rosters, counts, and
+mentions, and never accrue notifications.
+
+## Incoming webhooks
+
+```http
+POST /webhooks/t/<token>
+Content-Type: application/json
+
+{ "text": "Build #4213 passed" }
+```
+
+The token in the path is the credential (`app_webhooks.token`, 64 hex chars). A
+bare non-JSON body is treated as the message text. The token resolves to one
+`app_webhooks` row → one channel; the app posts there as its bot. There is **one
+webhook per (app, channel)** — re-adding a channel is idempotent. Rate limited
+per app via the `incomingWebhook` limit.
+
+| Status | Meaning |
+| --- | --- |
+| `200` | posted |
+| `400` | empty text |
+| `404` | missing token, unknown/inactive webhook or app, or a deleted channel |
+| `429` | rate-limited |
+
+Routing lives in `convex/http.ts`; delivery in `convex/apps/webhook.ts`.
+
+## Bot API
+
+```bash
+curl -X POST https://<host>/api/messages \
+  -H "Authorization: Bearer <apiToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"channel":"general","text":"Deploy finished"}'
+```
+
+`channel` is resolved to one of the app's own channels **by id or by name**; the
+bot may only post where it has been added. The response body is empty — read the
+HTTP status. Auth is the app's `apiToken` (rolled with `regenerateApiToken`).
+
+| Status | Meaning |
+| --- | --- |
+| `200` | posted |
+| `400` | empty text, bad JSON, or missing `channel` |
+| `401` | missing or bad bearer token |
+| `404` | channel not found, or the app isn't in it |
+| `429` | rate-limited |
+
+<Callout type="info">
+  A missing token on the incoming webhook returns `404` (the token *is* the
+  route); on the bot API a missing bearer returns `401`. They are not symmetric.
+</Callout>
+
+Delivery lives in `convex/apps/api.ts`.
+
+## Outgoing event subscriptions
+
+An app can register an `eventUrl`, a `signingSecret`, and an `eventTypes[]`
+(`message`, `reaction`) via the admin-only `setEventSubscription` mutation. An
+empty URL turns subscriptions off; the secret is minted on first enable and
+returned so the admin can configure their receiver.
+
+Events fire **only from human paths** — the channel branch of `messages.create`,
+`reactions.toggle`, and scheduled channel sends. The bot post paths
+(`api.ts`, `webhook.ts`) deliberately emit nothing, which keeps the system
+loop-safe. Delivery:
+
+1. `enqueueAppEvent` — schedules a dispatch **only if** an app is installed in the
+   channel (the common case has none, keeping the send path cheap).
+2. `dispatch` (`internalMutation`) — selects the channel's apps that subscribe to
+   the type, **excludes the app's own bot**, and returns the delivered app ids.
+3. The retrying `eventDeliveryPool` workpool → the `deliver` `"use node"` action.
+
+### Signing
+
+The `deliver` action sends:
+
+- `X-Webhook-Timestamp: <ms>`
+- `X-Webhook-Signature: v0=<hex>`, where the hex is computed as:
+
+```
+HMAC-SHA256(signingSecret, "<timestamp>.<body>")
+```
+
+The signed string is the timestamp and the raw JSON body joined by a `.`.
+
+Binding the timestamp into the signed string stops it being tampered
+independently. The payload is JSON:
+
+```json
+{
+  "id": "message:<messageId>:<memberId>",
+  "type": "message",
+  "timestamp": 1731000000000,
+  "workspace": { "id": "<workspaceId>" },
+  "channel": { "id": "<channelId>", "name": "general" },
+  "user": { "memberId": "<memberId>", "name": "Ada" },
+  "message": { "id": "<messageId>" },
+  "text": "Deploy finished"
+}
+```
+
+`reaction` events add a top-level `"reaction": "<emoji>"`. Verify on the receiver:
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verify(rawBody: string, headers: Headers, secret: string) {
+  const ts = headers.get("X-Webhook-Timestamp")!;
+  const sig = headers.get("X-Webhook-Signature")!; // "v0=<hex>"
+  const expected = "v0=" + createHmac("sha256", secret)
+    .update(`${ts}.${rawBody}`)
+    .digest("hex");
+  return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}
+```
+
+### SSRF protection
+
+The event URL must be `https` and non-internal. `convex/shared/safeFetch.ts`
+(`safeFetchUrl`, `isBlockedHost`, `isPrivateIp`) vets it at save time. The
+`deliver` action re-vets the URL, **re-resolves the host via DNS** and refuses any
+private resolved IP, and fetches with `redirect: "manual"` so it can't be bounced
+to an internal target. The residual DNS-rebinding TOCTOU is documented in the code.
+
+## Audit
+
+App lifecycle changes write audit entries: `app.created`, `app.updated`,
+`app.channel_added`, `app.channel_removed`, `app.removed`.
+
+<Cards>
+  <Card title="For end users" href="/docs/help/integrations" description="Setting up integrations from the workspace UI." />
+  <Card title="Notifications pipeline" href="/docs/developer/notifications-pipeline" description="The workpool fan-out the delivery pool mirrors." />
+  <Card title="Conventions" href="/docs/developer/conventions" description="The bot-identity model and reuse rules." />
+</Cards>

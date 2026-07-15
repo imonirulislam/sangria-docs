@@ -1,0 +1,71 @@
+---
+title: Contributing
+description: Repo layout, local setup, the pre-commit checklist, and commit conventions.
+---
+
+How to get Sangria running locally and ship a change that passes review.
+
+## Repo layout
+
+| Path | What lives there |
+| --- | --- |
+| `convex/` | The backend, grouped by domain: `workspace`, `messaging`, `notifications`, `huddles`, `apps`, `presence`, `account`, and `shared` (the reusable helpers). |
+| `src/` | The Next.js frontend — feature folders plus the App Router under `src/app`. |
+| `desktop/` | The Electron shell. |
+| `mobile/` | The Capacitor (iOS / Android) shell. |
+| `sangria-docs/` | These docs — a separate repo from the app. |
+
+## Local setup
+
+```bash
+bun install
+npx convex dev        # push the backend + serve it locally
+```
+
+Secrets live in `.env.local` and the Convex dashboard env — **never** committed.
+Huddles need LiveKit credentials (`LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`); the
+token and webhook endpoints fail closed without them.
+
+## Verify before you finish
+
+Run these on any change and fix what they surface:
+
+```bash
+npx convex dev --once   # push the backend, regenerate types, type-check convex/
+npx tsc --noEmit        # type-check the whole repo
+npx eslint .            # lint — includes the route-string ban (below)
+bun run test            # the convex-test backend suite — must stay green
+npx next build          # for non-trivial UI / cross-cutting changes
+```
+
+ESLint bans hand-written in-app URL strings: build URLs with `routes.*` (e.g.
+`routes.channel.view(wid, cid)`), never `` `/workspace/${…}` ``. See
+[Conventions](/docs/developer/conventions) for the full reuse table and
+[Testing](/docs/developer/testing) for the suite.
+
+<Callout type="warn">
+  New Convex functions **404 at runtime** until you push them with
+  `npx convex dev --once` — even when `tsc` and the tests pass. Push after adding
+  a function before you try to call it from the client.
+</Callout>
+
+## Commit conventions
+
+- **Feature-grouped commits** with an imperative subject (`feat(messages): …`).
+- **No `Co-Authored-By` trailer.**
+- Comments and commit messages describe *behavior* — they must not name the
+  product this app clones.
+- **Commit and push only when asked.** If you're on the default branch, branch first.
+- Secrets never land in a commit.
+
+## Definition of Done
+
+Every backend function owes auth, resource-level authorization, the right
+public/internal boundary, rate limiting where it writes durable state, a tenant
+check on every incoming id, and a test. The per-feature checklist and the shared
+helpers you must reuse are in [Conventions](/docs/developer/conventions).
+
+<Cards>
+  <Card title="Conventions" href="/docs/developer/conventions" description="The helpers to reuse and the Definition of Done." />
+  <Card title="Testing" href="/docs/developer/testing" description="The convex-test harness and the coverage order." />
+</Cards>

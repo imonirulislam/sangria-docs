@@ -1,0 +1,64 @@
+---
+title: Workspaces
+description: Create or join a workspace, manage settings, ownership, and members.
+---
+
+A workspace is an isolated space with its own members, channels, direct messages,
+and integrations. Nothing in one workspace is visible from another.
+
+## Create or join a workspace
+
+- **Create a workspace** — set it up and a unique join code is generated for you to
+  share.
+- **Join an existing workspace** — use its **6-character join code** (case-insensitive)
+  or an invite link someone shares with you.
+
+<Callout type="info" title="Why joining is rate-limited">
+  Joining by code is limited to a handful of attempts per 10 minutes, so codes can't
+  be guessed by brute force. If you hit the limit, wait a few minutes and try again.
+</Callout>
+
+## Workspace settings
+
+Admins and owners manage the workspace under **Customize workspace → Settings**:
+
+- **Name, description, and icon** — edit how the workspace presents itself.
+- **Reset the join code** — generate a fresh code. Existing members keep their access;
+  only the old code stops working.
+
+## Ownership
+
+Ownership has two levels:
+
+- **Primary owner** — the person who created the workspace. There is exactly one.
+- **Owners** — any number of additional owners with owner-level control.
+
+Only the **primary owner** can transfer primary ownership (to another owner) or delete
+the workspace.
+
+## Permissions & policies
+
+Admins can tighten some capabilities from "everyone" to "admins only". These policies
+include:
+
+- **Who can create channels.**
+- **The message edit window** — how long after posting a message can still be edited.
+- **Whether members can delete their own messages.**
+
+<Callout title="Where policies live">
+  Configure these under **Customize workspace** (admin/owner only). Changing a policy
+  affects everyone in the workspace.
+</Callout>
+
+## Members
+
+When you remove a member, they are **deactivated** rather than erased: they lose access
+to the workspace, but their past messages stay attributed to them so conversations
+still make sense. An admin can **reactivate** a deactivated member later to restore
+their access.
+
+<Cards>
+  <Card title="Channels" href="/docs/help/channels" description="Create channels and manage who's in them." />
+  <Card title="People & groups" href="/docs/help/people-and-groups" description="Members, roles, and user groups." />
+  <Card title="Account & security" href="/docs/help/account-and-security" description="Your sign-in and account settings." />
+</Cards>
