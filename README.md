@@ -16,6 +16,30 @@ bun run dev      # http://localhost:3000 (redirects /docs → /docs/help)
 bun run build    # production build (also validates every MDX page)
 ```
 
+## Self-host (part of the Sangria stack)
+
+The site builds to a standalone Node server (`output: 'standalone'`) that listens
+on **port 3002**. The Sangria app's `docker-compose.yml` runs this repo as a `docs`
+service and the Kong gateway routes **https://docs.sangria.localhost** → `docs:3002`,
+so the app links to the docs through the same gateway as everything else — no
+private IPs, no separate hosting.
+
+```bash
+# from the sangria app repo (this repo must be a sibling: ../sangria-docs)
+docker compose up --build docs      # or `docker compose up` for the whole stack
+# docs.sangria.localhost is registered by the app's `npm run dev:setup`
+```
+
+Standalone, without the gateway:
+
+```bash
+docker build -t sangria-docs .
+docker run --rm -p 3002:3002 sangria-docs   # http://localhost:3002/docs/help
+```
+
+The app reaches the docs via `NEXT_PUBLIC_DOCS_URL` (set to
+`https://docs.sangria.localhost` in the compose stack; override for other envs).
+
 ## Write a page
 
 1. Add an `.mdx` file under `content/docs/help/` or `content/docs/developer/`.
