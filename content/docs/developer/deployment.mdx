@@ -122,8 +122,11 @@ bunx convex env set JWKS -- "$(cat /tmp/sangria_jwks)"
 bunx convex env set SITE_URL https://sangria.imonirulislam.dev
 bunx convex env set LIVEKIT_API_KEY <same as .env.prod>
 bunx convex env set LIVEKIT_API_SECRET <same as .env.prod>
+# web-push needs BOTH VAPID keys server-side (setVapidDetails). VAPID_PUBLIC_KEY
+# is the same value as the NEXT_PUBLIC_VAPID_PUBLIC_KEY GitHub secret.
+bunx convex env set VAPID_PUBLIC_KEY <web-push public key>
 bunx convex env set VAPID_PRIVATE_KEY <web-push private key>
-bunx convex env set VAPID_SUBJECT mailto:you@example.com
+bunx convex env set VAPID_SUBJECT mailto:you@imonirulislam.dev
 ```
 
 ## GitHub configuration
