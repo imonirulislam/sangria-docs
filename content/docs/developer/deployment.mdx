@@ -1,0 +1,177 @@
+---
+title: Deployment
+description: Ship production from GitHub CI to a self-hosted server behind Kong and Cloudflare.
+---
+
+Production runs the whole stack on a single server: the Next.js app, the
+self-hosted Convex backend + Postgres, LiveKit, the docs site, and a Kong gateway
+that terminates TLS. GitHub Actions builds the images, pushes them to GHCR, and
+the server pulls and runs them. Cloudflare fronts a real domain.
+
+All infra lives under **`deploy/`** in the app repo (`docker-compose.yml` for dev,
+`docker-compose.prod.yml` for prod, the Kong + LiveKit configs, and
+`.env.prod.example`). Only the `Dockerfile` stays at the repo root (it's the app's
+build recipe). Dev and prod are separate compose files, so dev is never touched by
+a production change.
+
+## Topology
+
+```text
+Browser ──HTTPS/WSS──▶ Cloudflare ──(Origin Cert, Full Strict)──▶ :443 Kong
+                                                                    ├─ sangria.DOMAIN                    → app:3000
+                                                                    ├─ sangria-backend.DOMAIN            → backend:3210 (Convex client / WS)
+                                                                    ├─ sangria-api.DOMAIN                → backend:3211 (Convex HTTP actions)
+                                                                    ├─ sangria-backend-dashboard.DOMAIN  → dashboard:6791 (admin)
+                                                                    ├─ sangria-docs.DOMAIN               → docs:3002
+                                                                    └─ sangria-livekit.DOMAIN            → livekit:7880 (signaling)
+Browser ──WebRTC/UDP──────────────────────────────────────────────▶ server-ip:7882  (LiveKit media, bypasses Cloudflare)
+```
+
+The Cloudflare Origin Certificate is trusted only by Cloudflare's edge, so **every
+browser-facing host stays proxied (orange-clouded)**. LiveKit media uses IP ICE
+candidates, not the hostname, so keeping the LiveKit host proxied for signaling is
+fine — the media still flows straight to the server.
+
+## The pipeline
+
+`.github/workflows/deploy.yml` (in the app repo) runs on a `v*` tag or a manual
+dispatch, in three jobs:
+
+1. **build-and-push** — builds the Dockerfile `production` target with the
+   `NEXT_PUBLIC_*` values as build args and pushes `ghcr.io/imonirulislam/sangria-app`.
+2. **deploy** — SSHes to the server, checks out the release, renders the Kong and
+   LiveKit templates, then `docker compose pull && up -d`.
+3. **convex-deploy** — pushes `convex/` functions to the self-hosted backend.
+
+The docs image is built by its own workflow in the `sangria-docs` repo
+(`.github/workflows/build-image.yml`) and pulled by the app's prod compose.
+
+## Cloudflare + DNS
+
+<Callout type="info">
+  Point all six subdomains at the server IP with **proxy ON (orange)** and set the
+  zone's SSL/TLS mode to **Full (Strict)**.
+</Callout>
+
+- `sangria`, `sangria-backend`, `sangria-api`, `sangria-backend-dashboard`,
+  `sangria-docs`, `sangria-livekit` → all `A` records to the server IP, all proxied.
+- Create an **Origin Certificate** (SSL/TLS → Origin Server) for `*.DOMAIN`, and
+  save the certificate and key on the server as `prod-certs/origin.pem` and
+  `prod-certs/origin-key.pem`.
+- Put **Cloudflare Access** in front of `sangria-backend-dashboard.DOMAIN` — it's
+  an admin console. The admin key is still required, but don't leave it openly
+  reachable.
+
+## Firewall
+
+Open on the server:
+
+- `80`, `443` — Kong (HTTP/redirect + HTTPS).
+- `7881/tcp`, `7882/udp` — LiveKit media (direct to the server; not proxied).
+
+## One-time server bootstrap
+
+Run these once on the box. They can't be automated in CI (they mint secrets and
+touch DNS/Cloudflare).
+
+```bash
+# 1. Docker + compose plugin + envsubst (gettext), then clone the repo.
+#    All infra lives under deploy/, so the rest of the bootstrap runs from there.
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin gettext-base
+sudo mkdir -p /opt/sangria && sudo chown "$USER" /opt/sangria
+git clone git@github.com:imonirulislam/sangria.git /opt/sangria
+cd /opt/sangria/deploy
+
+# 2. Real config. Fill in the blanks (openssl rand -hex ... for the secrets).
+cp .env.prod.example .env.prod && $EDITOR .env.prod
+
+# 3. Cloudflare Origin cert + key (from the Cloudflare dashboard).
+mkdir -p prod-certs
+$EDITOR prod-certs/origin.pem       # paste the Origin Certificate
+$EDITOR prod-certs/origin-key.pem   # paste the private key
+
+# 4. Render the templated configs and bring the core up.
+set -a; . ./.env.prod; set +a
+envsubst '${DOMAIN}' < kong.prod.yml > kong.gen.yml
+envsubst '${LIVEKIT_API_KEY} ${LIVEKIT_API_SECRET}' < livekit.prod.yaml > livekit.gen.yaml
+echo "<GHCR_PULL_TOKEN>" | docker login ghcr.io -u imonirulislam --password-stdin
+# First bring-up: only the public-image services. The app + docs images live in
+# GHCR and don't exist until CI has built them, so the FULL `up` happens via the
+# deploy workflow (see "First deploy" below), not here.
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend sangria-db redis
+
+# 5. Generate the Convex admin key (store it as the CONVEX_SELF_HOSTED_ADMIN_KEY secret).
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend ./generate_admin_key.sh
+```
+
+### Convex deployment env (once)
+
+The backend needs its auth keys and app secrets set on the deployment (not the
+container env). Generate the auth keypair and set every value against the
+self-hosted URL:
+
+```bash
+# Run from the repo root — scripts/ and node_modules live there, not in deploy/.
+cd /opt/sangria && node scripts/generate-auth-keys.mjs   # writes /tmp/sangria_jwt_private_key + /tmp/sangria_jwks
+
+export CONVEX_SELF_HOSTED_URL=https://sangria-backend.imonirulislam.dev
+export CONVEX_SELF_HOSTED_ADMIN_KEY=<admin key from step 5>
+
+bunx convex env set JWT_PRIVATE_KEY -- "$(cat /tmp/sangria_jwt_private_key)"
+bunx convex env set JWKS -- "$(cat /tmp/sangria_jwks)"
+bunx convex env set SITE_URL https://sangria.imonirulislam.dev
+bunx convex env set LIVEKIT_API_KEY <same as .env.prod>
+bunx convex env set LIVEKIT_API_SECRET <same as .env.prod>
+bunx convex env set VAPID_PRIVATE_KEY <web-push private key>
+bunx convex env set VAPID_SUBJECT mailto:you@example.com
+```
+
+## GitHub configuration
+
+**Variables** (Settings → Secrets and variables → Actions → Variables):
+
+- `DOMAIN` — e.g. `imonirulislam.dev`
+- `NEXT_PUBLIC_APP_NAME` — e.g. `Sangria` (optional)
+
+**Secrets:**
+
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — web-push public key (baked into the app image)
+- `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` — SSH access to the server
+- `GHCR_PULL_TOKEN` — a PAT with `read:packages` (the server pulls images with it)
+- `CONVEX_SELF_HOSTED_ADMIN_KEY` — from `generate_admin_key.sh`
+
+## Deploying
+
+<Callout type="warn">
+  **First deploy** — before the first tag, make sure both images can be pulled:
+  push the `sangria-docs` repo's `main` (its *Build docs image* workflow publishes
+  the docs image) and set all the GitHub variables/secrets above. The first tag
+  then builds the app image and brings up the full stack (app, docs, gateway).
+</Callout>
+
+- **Release:** push a tag — `git tag v1.0.0 && git push origin v1.0.0`.
+- **Manual:** Actions → *Deploy (production)* → Run workflow.
+
+## Rollback
+
+Re-run the workflow for an older tag, or on the server (`cd /opt/sangria/deploy`)
+set `IMAGE_TAG` in `.env.prod` to a previous tag and re-run
+`docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`.
+
+## Operational notes
+
+- **Postgres backups** are yours to own now — schedule a `pg_dump` (or snapshot the
+  `pg_data` volume).
+- **Cloudflare free plan** caps request bodies at ~100 MB, which limits very large
+  uploads through the proxied `sangria-backend` host.
+- **Convex action hairpin:** `CONVEX_CLOUD_ORIGIN` is the public URL, so the "use
+  node" action runtime self-calls out through Cloudflare and back. It works
+  (publicly trusted) with a little extra latency.
+- **Memory:** the app container is capped at 1 GB and idles in the low hundreds of
+  MB — production does not carry the dev server's multi-GB Turbopack footprint.
+- **LiveKit behind NAT:** `use_external_ip: true` advertises the server's
+  auto-detected public IP for media. If the box is behind NAT (its public IP isn't
+  on a local interface), set it explicitly in `livekit.prod.yaml`
+  (`rtc.node_ip: <public-ip>`) instead — and verify a huddle's audio actually
+  connects on the real server, since a wrong media IP fails silently (DTLS/ICE
+  timeout) rather than erroring.
