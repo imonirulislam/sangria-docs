@@ -37,6 +37,61 @@ allowed one.
 - `isPrimaryOwner(member, workspace)` — the workspace creator; only they can transfer
   ownership or delete the workspace.
 
+## Auth-injecting function wrappers (preferred over manual gates)
+
+The helpers above are the primitives. On top of them, `convex/shared/functions.ts`
+provides **function builders that fold the gate into the function definition** — so a
+handler can't run ungated and you can't forget the check. They're built on
+`convex-helpers` `customQuery`/`customMutation`: each consumes an id from the client
+args, resolves + authorizes, and injects the resolved rows onto `ctx`.
+
+| Builder | Consumes | Injects | Gate |
+| --- | --- | --- | --- |
+| `workspacePermission(perm).{mutation,query}` | `workspaceId` | `member` | `requirePermission(…, perm)` |
+| `workspaceAdmin{Mutation,Query}` | `workspaceId` | `member` | `"workspace.edit"` |
+| `workspaceMember{Mutation,Query}` | `workspaceId` | `member` | `requireMember` |
+| `identity{Mutation,Query}` | — | `userId` | `requireIdentity` |
+| `appAdminMutation` | `appId` | `app`, `member` | admin on the app's workspace |
+| `webhookAdminMutation` | `webhookId` | `webhook`, `app`, `member` | admin on the app's workspace |
+
+Resource-keyed wrappers specific to one domain live in that domain's file (e.g.
+`groupManageMutation` in `userGroups.ts`, `emojiMemberMutation` in `customEmoji.ts`).
+
+```ts
+// Before — the gate is opt-in and repeated in every handler:
+export const setEventSubscription = mutation({
+  args: { appId: v.id("apps"), url: v.string() },
+  handler: async (ctx, args) => {
+    const { app, member } = await loadOwnedApp(ctx, args.appId); // easy to forget
+  },
+});
+
+// After — the gate is part of the function; ctx.app / ctx.member are guaranteed:
+export const setEventSubscription = appAdminMutation({
+  args: { url: v.string() }, // appId consumed by the wrapper
+  handler: async (ctx, args) => {
+    const { app, member } = ctx; // already resolved + authorized
+  },
+});
+```
+
+### When to stay manual (don't force a wrapper)
+
+- **Soft reads** — `getAuthUserId` + degrade to an empty result for anonymous
+  callers. A throwing wrapper would break that contract.
+- **Compound gates** — e.g. `messages.create` checks read access to the target
+  channel/DM AND to a forwarded source message; a single-resource wrapper can't
+  express "read A and read B."
+- **Conditional gates** — a wrapper enforces only the *necessary* base gate; keep
+  any tightening in the handler (e.g. a base "can manage this channel" check, with
+  structural privacy/default changes additionally requiring `channel.manage`).
+- **Arg-name mismatch** — if a function's id arg isn't the name the wrapper consumes
+  (`channels.update` uses `id`, not `channelId`), leave it manual rather than rename
+  a public arg to fit.
+
+Adopted so far: `apps`, `userGroups`, `customEmoji`, `workspaces`, `conversations`,
+`members`, and the identity-writes in `notifications` / `huddles` / `presence`.
+
 ## Public vs internal
 
 `query` / `mutation` / `action` are **client-callable**. Anything that fans out,
