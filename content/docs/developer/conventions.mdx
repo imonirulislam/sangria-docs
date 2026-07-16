@@ -92,6 +92,37 @@ export const setEventSubscription = appAdminMutation({
 Adopted so far: `apps`, `userGroups`, `customEmoji`, `workspaces`, `conversations`,
 `members`, and the identity-writes in `notifications` / `huddles` / `presence`.
 
+## Module boundaries
+
+`convex/shared/` is the foundation layer — `authz`, `enums`, `routes`, the rate
+limits, `publicUser`, and the function builders above. Every feature domain
+(`apps`, `workspace`, `messaging`, `notifications`, `huddles`, `presence`, …)
+builds on it. Feature domains legitimately import *each other* — a message write
+fires a notification event, a huddle posts into a conversation — so that graph is
+intentionally dense and is **not** restricted.
+
+The one rule that *is* enforced: **`shared/` must never import from a feature
+domain.** A foundation that reaches back "up" into a feature inverts the
+dependency direction and lets the base layer rot. An ESLint rule
+(`no-restricted-imports`, scoped to `convex/shared/**`) fails lint if it does.
+When shared code needs a feature primitive, move the primitive *down* into
+shared — e.g. the conversation-membership read (`isConversationMember`) lives in
+`shared/authz` beside `getMember`, and is re-exported from
+`workspace/conversationsHelpers` so the feature callers keep one import.
+
+## Client types come from the backend
+
+The frontend never hand-writes a type that mirrors a query's return shape —
+those copies drift silently (the integrations-list type had already lost a field
+the query returns). Derive them instead:
+
+- A row from a query → `(typeof api.x.y._returnType)[number]`, or
+  `._returnType["page"][number]` for a paginated query.
+- A stored document → `Doc<"table">` from `convex/_generated/dataModel`.
+
+Never `as`-cast a `useQuery` result to a hand-written type: the cast suppresses
+exactly the drift the type exists to catch.
+
 ## Public vs internal
 
 `query` / `mutation` / `action` are **client-callable**. Anything that fans out,
