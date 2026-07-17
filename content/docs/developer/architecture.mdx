@@ -67,8 +67,8 @@ Work that shouldn't block a request runs off the request path:
   mutation O(1); LiveKit webhooks use it to dispatch to mutations.
 - **Crons** (`convex/crons.ts`) — recurring jobs: a presence sweep and inactive-user
   cleanup (every 5 min), a stuck-notification-event sweep, scheduled-message and
-  "Later" reminder delivery (every minute), expired custom-status cleanup, and a
-  daily per-workspace analytics rollup.
+  "Later" reminder delivery (every minute), expired custom-status cleanup, a
+  daily per-workspace analytics rollup, and a 2FA session-state prune (every 6h).
 
 ## Convex components
 
@@ -80,6 +80,37 @@ Two Convex components handle work that needs concurrency limits and retries:
 - **Workpool** — bounded, retrying task pools. `pushDeliveryPool` fans out web-push;
   `eventDeliveryPool` fans out signed outgoing app events. Both cap
   `maxParallelism` and retry with exponential backoff.
+
+## Two-factor authentication
+
+Optional account-level **TOTP** 2FA, enforced **in the authz layer** so it can't
+be sidestepped by calling a query directly:
+
+- **Enforcement** lives in `assertTwofaSatisfied` (`convex/shared/authz.ts`),
+  called from both `requireMember` (writes / admin / channel access) and
+  `assertCanRead` (reads). It throws a `ConvexError` with a code
+  (`2FA_ENROLLMENT_REQUIRED` / `2FA_CHALLENGE_REQUIRED`) so the client can route.
+- **Policy** — `require2fa` is a per-workspace flag in `workspace_permissions`
+  (default **on** for workspaces created after the feature; existing workspaces
+  have no row and stay off, so nothing is retroactively locked out).
+- **Credential** — one `totp_credentials` row per user: the secret, hashed
+  one-time recovery codes, a failure/lockout counter, and a replay guard. TOTP is
+  hand-rolled on the Web Crypto API (`convex/shared/totp.ts`) — no dependency.
+- **Session model** — clearing a challenge writes a `twofa_session_state` row
+  keyed by the auth session id (`getAuthSessionId`); the gate checks it so a
+  passed session isn't re-prompted. A cron prunes rows whose session no longer
+  exists. Enrolled users are challenged on entry to _any_ workspace; unenrolled
+  users are force-enrolled only where a workspace requires it.
+- **Client** — `TwoFactorGate` (`src/features/security`) wraps the workspace
+  shell, reads the soft `gateState` query, and shows the challenge / forced
+  enrollment before the shell mounts.
+- **Admin reset** — `resetMemberTwofa` (member-management gated; owner authority
+  required for an admin/owner target) clears a member's credential so they
+  re-enroll, for the lost-authenticator-and-codes case. Audited as
+  `member.twofa_reset`.
+
+The enroll/verify mutations are account-scoped and never call the gate, so a user
+is never locked out of setting 2FA up. Passkeys / WebAuthn are a planned follow-up.
 
 ## How a message flows
 

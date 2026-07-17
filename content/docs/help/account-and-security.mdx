@@ -1,6 +1,6 @@
 ---
 title: Account & security
-description: Set your theme and timezone, review your sign-in history, and read the workspace audit log.
+description: Turn on two-factor authentication, set your theme and timezone, review your sign-in history, and read the workspace audit log.
 ---
 
 Your account settings control how Sangria looks and behaves for you, and give you a
@@ -45,13 +45,64 @@ someone is trying to get in.
   let a workspace admin know.
 </Callout>
 
+## Two-factor authentication
+
+Add a second step at sign-in so a stolen password alone isn't enough to get into
+your account. Sangria uses **time-based one-time codes (TOTP)** from an
+authenticator app — Google Authenticator, 1Password, Authy, and most password
+managers work.
+
+### Turn it on
+
+1. Go to **Account → Settings → Two-factor authentication** and choose **Enable**.
+2. **Scan the QR code** with your authenticator app (or type the key in by hand).
+3. Enter the **6-digit code** the app shows to confirm, then **save your recovery
+   codes**.
+
+### Recovery codes
+
+Enabling 2FA gives you a set of **one-time recovery codes**. Save them somewhere
+safe — each one works **once** to get in if you lose your authenticator. You can
+generate a fresh set anytime from the same screen (which replaces the old ones);
+you'll need a current code to do it.
+
+<Callout type="warn" title="Save your recovery codes">
+  They're shown only once. Without them, losing your authenticator can lock you
+  out — a workspace admin would have to reset your 2FA.
+</Callout>
+
+### Signing in with 2FA on
+
+After your password, you'll be asked for the current 6-digit code before you're
+let in. Lost your device? Choose **Use a recovery code** instead.
+
+### Workspaces that require 2FA
+
+An admin can make 2FA **required** for a workspace (see
+[Workspaces](/docs/help/workspaces)). If you open a workspace that requires it and
+haven't set up 2FA yet, you'll be prompted to set it up before you can continue.
+
+### Turning it off
+
+From the same screen you can **turn off** 2FA. You'll need a current code to
+confirm, so nobody on an unattended session can quietly remove it.
+
+### Locked out?
+
+If you lose your authenticator **and** your recovery codes, a workspace admin can
+**reset your two-factor** from **Members** management — that clears it from your
+account so you can set it up fresh next time you sign in. Contact an admin to do
+this. Admins: the action lives in the ⋯ menu next to a member (and shows for any
+member who has 2FA on, including the primary owner); it's recorded in the audit
+log.
+
 ## Audit log
 
 Admins get a workspace-level **audit log** — a record of security- and
 admin-relevant actions across the workspace. It captures:
 
 - **Workspace, permission, and ownership changes.**
-- **Member changes** — role changes, removals, and reactivations.
+- **Member changes** — role changes, removals, reactivations, and 2FA resets.
 - **Channel** create, update, and delete.
 - **Admin message edits and deletes.**
 - **Integration changes.**
