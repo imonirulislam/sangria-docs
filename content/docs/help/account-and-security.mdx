@@ -50,7 +50,8 @@ someone is trying to get in.
 Add a second step at sign-in so a stolen password alone isn't enough to get into
 your account. Sangria uses **time-based one-time codes (TOTP)** from an
 authenticator app — Google Authenticator, 1Password, Authy, and most password
-managers work.
+managers work. (Prefer no codes at all? See [Passkeys](#passkeys) to sign in with
+your fingerprint or face instead of a password.)
 
 ### Turn it on
 
@@ -94,7 +95,42 @@ If you lose your authenticator **and** your recovery codes, a workspace admin ca
 account so you can set it up fresh next time you sign in. Contact an admin to do
 this. Admins: the action lives in the ⋯ menu next to a member (and shows for any
 member who has 2FA on, including the primary owner); it's recorded in the audit
-log.
+log. (Passkeys are a separate sign-in method, not 2FA — a reset leaves them
+alone.)
+
+## Passkeys
+
+A **passkey** lets you sign in with your device's fingerprint, face, PIN, or a
+hardware security key — no password to type. It's stored on your device and never
+leaves it, which also makes it resistant to phishing.
+
+### Add a passkey
+
+Go to **Account → Settings → Passkeys** and choose **Add a passkey**. For your
+security you'll first **confirm it's you** — your password, or a code from your
+authenticator app if you use one — since a passkey is a way into your account.
+Then your browser or device prompts you to create it, and it's saved. Add one per
+device you sign in from; each is listed with when it was added and last used, and
+you can rename or remove any of them.
+
+<Callout title="Register on more than one device">
+  A passkey is tied to the device that created it. Add one on each device you use
+  (and keep your email-and-password sign-in as a fallback) so losing a single
+  device doesn't lock you out — there are no recovery codes for passkeys.
+</Callout>
+
+### Sign in with a passkey
+
+On the sign-in screen, choose **Sign in with a passkey** and confirm on your
+device — no email or password needed. Because unlocking the passkey already
+proves it's you (fingerprint / face / PIN), signing in this way goes straight
+through, even in a workspace that requires two-factor authentication.
+
+### Remove a passkey
+
+Remove a passkey from **Account → Settings → Passkeys** — on a lost or shared
+device, for instance. Removing your last passkey just means you sign in with your
+email and password (or Google / GitHub) as usual.
 
 ## Audit log
 

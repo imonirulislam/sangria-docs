@@ -68,7 +68,8 @@ Work that shouldn't block a request runs off the request path:
 - **Crons** (`convex/crons.ts`) — recurring jobs: a presence sweep and inactive-user
   cleanup (every 5 min), a stuck-notification-event sweep, scheduled-message and
   "Later" reminder delivery (every minute), expired custom-status cleanup, a
-  daily per-workspace analytics rollup, and a 2FA session-state prune (every 6h).
+  daily per-workspace analytics rollup, a 2FA session-state prune (every 6h), and
+  a passkey-challenge sweep (hourly).
 
 ## Convex components
 
@@ -105,12 +106,57 @@ be sidestepped by calling a query directly:
   shell, reads the soft `gateState` query, and shows the challenge / forced
   enrollment before the shell mounts.
 - **Admin reset** — `resetMemberTwofa` (member-management gated; owner authority
-  required for an admin/owner target) clears a member's credential so they
+  required for an admin/owner target) clears a member's TOTP credential so they
   re-enroll, for the lost-authenticator-and-codes case. Audited as
   `member.twofa_reset`.
 
 The enroll/verify mutations are account-scoped and never call the gate, so a user
-is never locked out of setting 2FA up. Passkeys / WebAuthn are a planned follow-up.
+is never locked out of setting 2FA up.
+
+## Passkeys (passwordless sign-in)
+
+Passkeys (WebAuthn) are a **first-factor sign-in method**, alongside password and
+OAuth — not a 2FA second factor. `@simplewebauthn` handles the ceremonies;
+`@simplewebauthn/server` verifies (ES256 / ECDSA-P256) in the Convex default
+runtime, so no `"use node"` action is needed. RP ID + allowed origins are pinned
+server-side in `convex/shared/webauthn.ts` (env `WEBAUTHN_RP_ID` /
+`WEBAUTHN_ORIGINS`, defaulting to `localhost` + `http://localhost:3000`) — the
+client's origin is never trusted.
+
+- **Registration** (`convex/account/passkeys.ts`) — a signed-in user registers a
+  passkey from Account → Security. Options use `residentKey: "required"` (a
+  _discoverable_ credential, so login can be usernameless) and
+  `userVerification: "required"` (biometric/PIN, so a passkey is device + user).
+  One `webauthn_credentials` row per device (public key, signature counter,
+  transports, label).
+- **Step-up re-auth** (`convex/account/reauth.ts`) — a passkey is a permanent,
+  password-free login credential, so adding one requires a recent step-up
+  re-authentication (like GitHub/Google): the account re-confirms its **password**
+  (`withPassword`, an action using `retrieveAccount`) or a current **TOTP code**
+  (`withTotp`), which writes a short-lived per-session marker
+  (`account_reauth_state`). `assertMayRegister` requires that marker whenever the
+  account _has_ such a secret, and consumes it on success (one step-up ⇒ one add).
+  This stops a walk-up on an unlocked session from planting a backdoor passkey.
+  OAuth-only accounts with no 2FA have no local secret to confirm, so they fall
+  back to the signed-in session (documented residual — enabling 2FA closes it).
+- **Sign-in** (`convex/account/passkeysLogin.ts`) — `loginOptions` is
+  **unauthenticated** and usernameless (empty `allowCredentials`, so the browser
+  offers any discoverable passkey); it stores a `webauthn_login_challenges` row
+  (no user yet — looked up later by the signed challenge value). The client runs
+  the ceremony and calls `signIn("passkey", { response })`. The `passkey`
+  `ConvexCredentials` provider (`convex/auth.ts`) calls the internal `verifyLogin`,
+  which verifies the assertion (UV required), advances the signature counter (with
+  a clone check), **creates the auth session itself and marks it 2FA-cleared**,
+  then returns `{ userId, sessionId }` — so `@convex-dev/auth` mints tokens for a
+  session that already satisfies the gate. A passkey login therefore signs in
+  straight through, even in a workspace that requires 2FA, because unlocking the
+  passkey already proved device + user. Failures return `null` (opaque — the
+  client never learns whether a credential exists).
+- **Cleanup** — short-TTL challenge rows (both tables) are consumed on verify and
+  swept hourly by `pruneStaleChallenges`.
+
+Rate limits: `passkeyRegister` (per user) and `passkeyLogin` (a single coarse
+global bucket, since sign-in is unauthenticated — see the DoS note in code).
 
 ## How a message flows
 
