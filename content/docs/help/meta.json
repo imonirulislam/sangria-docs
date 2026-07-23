@@ -9,6 +9,7 @@
     "channels",
     "direct-messages",
     "messages",
+    "slash-commands",
     "huddles",
     "notifications",
     "search",
