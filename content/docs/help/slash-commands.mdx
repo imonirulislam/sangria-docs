@@ -1,0 +1,71 @@
+---
+title: Slash commands
+description: Type "/" in the composer to run quick actions — reminders, status, mute, invite, and more.
+---
+
+Slash commands are shortcuts you run right from the message composer. Type **`/`** at the
+start of the composer and a menu appears with the commands available where you're typing.
+Keep typing to filter, use **↑ / ↓** to move, and **Enter** (or **Tab**) to fill one in —
+then add any arguments and press **Enter** to run it.
+
+<Callout type="info" title="Only at the start">
+  The command menu only opens when `/` is the first thing in the composer. A `/` in the
+  middle of a message (like a URL or a path) is treated as normal text.
+</Callout>
+
+## Available commands
+
+| Command | What it does |
+| --- | --- |
+| `/shrug [message]` | Sends your message with `¯\_(ツ)_/¯` appended. |
+| `/me <action>` | Posts an italicized action, e.g. *is heading out*. |
+| `/remind <text> in <time>` | Sets yourself a reminder — see [Reminders](#reminders). |
+| `/away` | Sets your presence to **away**. |
+| `/active` (or `/back`) | Sets your presence back to **active**. |
+| `/status <emoji> <text>` | Sets a custom status; `/status clear` removes it. |
+| `/dnd <time>` | Mutes the **current channel** for a while. |
+| `/invite <name>` | Adds someone to the **current channel**. |
+| `/help` | Lists the commands available where you're typing. |
+
+Some commands only make sense in a channel, so **`/dnd`** and **`/invite`** appear in
+channels but not in direct messages.
+
+## Reminders
+
+`/remind` sets a personal reminder that shows up in your **Later** list and notifies you
+when it's due. Give it what to remind you about, then when:
+
+- **Relative:** `/remind submit the report in 2h` — also `30m`, `1d`, `1w`.
+- **A time of day:** `/remind standup at 09:00` — the next time that clock time comes around.
+
+If the time can't be understood, you'll get a quick hint instead of an accidental reminder.
+
+## Status
+
+`/status` sets your custom status, with an optional leading emoji:
+
+- `/status 🌴 on vacation`
+- `/status :your-custom-emoji: heads-down` — workspace **custom emoji** work too.
+- `/status clear` — remove your current status.
+
+Statuses set this way stay until you clear them. See
+[Profile & status](/docs/help/profile-and-status) for more.
+
+## Mute a channel
+
+`/dnd 30m` mutes the channel you're in for the given time (`30m`, `2h`, `1d`), so you stop
+getting its notifications until it lapses. Manage mutes any time from the channel's
+notification settings — see [Notifications](/docs/help/notifications).
+
+## Invite to a channel
+
+`/invite jane` adds a workspace member to the current channel. If exactly one person
+matches, they're added right away; if the name is ambiguous (or you didn't type one), the
+add-people picker opens so you can choose. See
+[People & groups](/docs/help/people-and-groups) and [Channels](/docs/help/channels).
+
+## Sending a message that starts with "/"
+
+If you want to post text that genuinely begins with a slash and isn't a command (for
+example `/etc/hosts`), just type it — anything that isn't a recognized command is sent as
+an ordinary message.
