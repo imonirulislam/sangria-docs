@@ -9,7 +9,6 @@ import {
   Plug,
   Radio,
   Search,
-  Wine,
 } from 'lucide-react';
 
 const features = [
@@ -24,7 +23,7 @@ const features = [
 export default function HomePage() {
   return (
     <main className="relative flex flex-1 flex-col items-center overflow-hidden px-4">
-      {/* Wine glow behind the hero — adapts to light/dark via the primary token. */}
+      {/* Berry glow behind the hero — adapts to light/dark via the primary token. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] bg-[radial-gradient(60%_60%_at_50%_-5%,color-mix(in_oklab,var(--color-fd-primary)_20%,transparent),transparent_70%)]"
@@ -36,7 +35,8 @@ export default function HomePage() {
 
       <section className="mx-auto flex max-w-3xl flex-col items-center pt-20 pb-14 text-center sm:pt-28">
         <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-card/60 px-3.5 py-1.5 text-xs font-medium text-fd-muted-foreground backdrop-blur">
-          <Wine className="size-3.5 text-fd-primary" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.svg" alt="" className="size-3.5 rounded-[3px]" />
           Sangria · Documentation
         </span>
 

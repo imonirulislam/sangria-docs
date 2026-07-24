@@ -3,27 +3,20 @@ import { ImageResponse } from 'next/og';
 export const size = { width: 32, height: 32 };
 export const contentType = 'image/png';
 
-// Wine-gradient tile with a serif "S" — the Sangria mark, as the favicon.
+// Base64 copy of public/logo-mark.svg — inlined because ImageResponse (satori)
+// renders standalone, without access to the public folder at request time.
+const LOGO_MARK_SVG_BASE64 =
+  'PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InNhbmdyaWFUaWxlIiB4MT0iMjU2IiB5MT0iMCIgeDI9IjI1NiIgeTI9IjUxMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgogICAgICA8c3RvcCBzdG9wLWNvbG9yPSIjN0MxRTNBIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzNFMEUxRCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CgogIDwhLS0gQXBwIHRpbGUgLS0+CiAgPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSIxMTYiIGZpbGw9InVybCgjc2FuZ3JpYVRpbGUpIi8+CgogIDwhLS0gQ2l0cnVzIHdoZWVsIG1hcmsgLS0+CiAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU2IiByPSIxNTAiIGZpbGw9IiNGRkE1MUYiLz4KICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjE1MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEwIi8+CiAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU2IiByPSIxMTgiIGZpbGw9IiNGRkM4NzMiLz4KCiAgPCEtLSBSYWRpYXRpbmcgc2VnbWVudHMgKDggd2VkZ2VzKSwgbGlrZSBhIGNpdHJ1cyBjcm9zcy1zZWN0aW9uIC0tPgogIDxnIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSI2IiBzdHJva2UtbGluZWNhcD0icm91bmQiPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjM3NCIgeTI9IjI1NiIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjMzOSIgeTI9IjMzOSIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjI1NiIgeTI9IjM3NCIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjE3MyIgeTI9IjMzOSIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjEzOCIgeTI9IjI1NiIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjE3MyIgeTI9IjE3MyIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjI1NiIgeTI9IjEzOCIvPgogICAgPGxpbmUgeDE9IjI1NiIgeTE9IjI1NiIgeDI9IjMzOSIgeTI9IjE3MyIvPgogIDwvZz4KCiAgPCEtLSBKdWljZS12ZXNpY2xlIGdsaW50cyBmb3IgYSBsaXR0bGUgdGV4dHVyZS9kaW1lbnNpb24gLS0+CiAgPGcgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC41Ij4KICAgIDxjaXJjbGUgY3g9IjI5OCIgY3k9IjIyOCIgcj0iNyIvPgogICAgPGNpcmNsZSBjeD0iMjIyIiBjeT0iMjkwIiByPSI1Ii8+CiAgICA8Y2lyY2xlIGN4PSIyOTAiIGN5PSIzMDAiIHI9IjQiLz4KICA8L2c+CgogIDwhLS0gQ2VudGVyIHBpdGggLS0+CiAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU2IiByPSIxNCIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC45Ii8+Cjwvc3ZnPgo=';
+
 export default function Icon() {
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(145deg, #c23063, #8f1d43)',
-          color: '#fff',
-          fontSize: 23,
-          fontWeight: 700,
-          fontFamily: 'Georgia, serif',
-          borderRadius: 7,
-        }}
-      >
-        S
-      </div>
+      <img
+        width={size.width}
+        height={size.height}
+        src={`data:image/svg+xml;base64,${LOGO_MARK_SVG_BASE64}`}
+        alt=""
+      />
     ),
     { ...size },
   );
