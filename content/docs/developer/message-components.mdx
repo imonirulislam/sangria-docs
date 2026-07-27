@@ -1,0 +1,196 @@
+---
+title: Message components
+description: Attach mrkdwn text and buttons to a message an app posts, and receive a signed callback when a button is clicked.
+---
+
+import { MessageBlockBuilder } from "@/components/message-block-builder";
+
+An app posting via the [incoming webhook or bot API](/docs/developer/integrations-api)
+can attach `blocks` to its message: rich `section` text, a row of `actions`
+buttons, a `divider`, an `image`, a `header`, or a `context` line. Clicking a
+button fires a signed `interaction` event to the app's event URL — the same
+delivery pipeline outgoing events already use, just a new event type.
+Button delivery is **fire-and-forget**: the click can't rewrite the
+original message as part of its response. React to it asynchronously via
+the bot API instead. These six block types are what's supported — select
+menus, checkboxes, and other input elements, `input`/modal blocks,
+`table`/`data_table`, `video`, and full `rich_text` blocks are not (see
+[Scope](#scope) below).
+
+## The `blocks` field
+
+Add `blocks` alongside `text` when posting — a message can mix section and
+actions blocks, in the order they should render:
+
+```json
+{
+  "text": "Approve this deploy?",
+  "blocks": [
+    {
+      "type": "section",
+      "text": "*Deploy #4213* is ready. Triggered by `ci-bot` on `main`. See the <https://example.com/pr/42|full diff>."
+    },
+    {
+      "type": "actions",
+      "elements": [
+        { "type": "button", "text": "Approve", "actionId": "approve", "style": "primary" },
+        { "type": "button", "text": "Reject", "actionId": "reject", "style": "danger" },
+        { "type": "button", "text": "View diff", "url": "https://example.com/pr/42" }
+      ]
+    }
+  ]
+}
+```
+
+| Limit | Value |
+| --- | --- |
+| Blocks per message | 10 |
+| Section text length | 3000 characters |
+| Buttons per `actions` block | 5 |
+| Button text length | 75 characters |
+| Header text length | 150 characters |
+| Elements per `context` block | 10 |
+| Image alt text length | 2000 characters |
+
+A malformed or oversized payload is rejected the same way an unrecognized
+`text` shape is — see the status codes on the
+[incoming webhook and bot API](/docs/developer/integrations-api) page.
+
+### Section blocks
+
+A `section` block is a chunk of `mrkdwn`-formatted text — Slack's own
+formatting syntax, not standard CommonMark:
+
+| Syntax | Renders as |
+| --- | --- |
+| `*bold*` | **bold** |
+| `_italic_` | _italic_ |
+| `~strike~` | ~~strike~~ |
+| `` `code` `` | `code` |
+| `<https://example.com\|label>` | a link reading "label" |
+| `<https://example.com>` | a link reading the URL itself |
+
+Formatting is single-pass and doesn't nest (`*bold _and italic_*` isn't
+specially handled — Slack's own mrkdwn doesn't nest cleanly either). Only
+`http`/`https` links render as clickable — anything else (`javascript:`,
+`data:`, etc.) renders as inert plain text.
+
+### Actions blocks
+
+Each button is exactly one of two kinds:
+
+- **`actionId`** — a callback button. Clicking it fires an `interaction` event
+  back to your app with this id, so you know which button was pressed.
+- **`url`** — a plain link. It opens directly; no event fires.
+
+A button needs exactly one of `actionId` or `url`, never both, never neither.
+`style` is optional (`primary`, `danger`, or omit it for the neutral default).
+
+### Divider blocks
+
+A plain horizontal rule — no fields:
+
+```json
+{ "type": "divider" }
+```
+
+### Image blocks
+
+```json
+{
+  "type": "image",
+  "imageUrl": "https://example.com/screenshot.png",
+  "altText": "Deploy dashboard screenshot",
+  "title": "Latest deploy"
+}
+```
+
+`imageUrl` must be `http`/`https` — unlike an unsafe link inside a `section`
+block (which just renders as inert plain text), an unsafe `imageUrl` rejects
+the **entire message** with a `400`. Slack's own field names also work:
+`image_url`, `alt_text`, and a `{ "type": "plain_text", "text": "…" }`-wrapped
+`title`.
+
+### Header blocks
+
+```json
+{ "type": "header", "text": "Deploy #4213" }
+```
+
+Plain text only — unlike `section`, `header` text is never run through the
+mrkdwn tokenizer (this matches Slack's own header block, which is always
+`plain_text`). Slack's `{ "type": "plain_text", "text": "…" }` wrapper is
+also accepted and normalized to a bare string.
+
+### Context blocks
+
+A small row of muted text and/or inline images, useful for a byline or
+timestamp:
+
+```json
+{
+  "type": "context",
+  "elements": [
+    { "type": "text", "text": "Posted by `ci-bot`" },
+    { "type": "image", "imageUrl": "https://example.com/avatar.png", "altText": "ci-bot" }
+  ]
+}
+```
+
+Text elements are mrkdwn-formatted, same as a `section` block. Slack's own
+element shapes also work: a `mrkdwn` or `plain_text` typed element
+normalizes to `text`, and `image_url`/`alt_text` normalize the same way the
+image block's do.
+
+### Scope
+
+<Callout type="warn" title="Supported block types">
+  `section`, `actions`, `divider`, `image`, `header`, and `context` — that's
+  the full set. Select menus, checkboxes, and other interactive elements
+  beyond a plain button; `input`/modal blocks; `table`/`data_table`; `video`;
+  and full `rich_text` blocks are all out of scope — a message using one of
+  these is rejected with a clean `400`, not silently dropped or ignored.
+  Button delivery is fire-and-forget: your app can't rewrite the message in
+  the interaction response. Post a follow-up message via the bot API instead
+  if you need to reflect the outcome.
+</Callout>
+
+## The `interaction` event
+
+Subscribe your app to the `interaction` event type the same way you'd
+subscribe to `message` or `reaction` (`setEventSubscription`, or the
+**Events** tab in the workspace's integrations settings). It's delivered only
+to the one app that owns the clicked message's blocks — not fanned out to
+every app installed in the channel the way `message`/`reaction` events are.
+
+```json
+{
+  "id": "interaction:<messageId>:<memberId>:<actionId>:<timestamp>",
+  "type": "interaction",
+  "timestamp": 1731000000000,
+  "workspace": { "id": "<workspaceId>" },
+  "channel": { "id": "<channelId>", "name": "general" },
+  "user": { "memberId": "<memberId>", "name": "Ada" },
+  "message": { "id": "<messageId>" },
+  "actionId": "approve"
+}
+```
+
+Signing, headers (`X-Webhook-Timestamp` / `X-Webhook-Signature`), and SSRF
+protection are identical to every other outgoing event — see
+[Outgoing event subscriptions](/docs/developer/integrations-api#outgoing-event-subscriptions)
+for the full verification walkthrough. Don't re-derive it here; the HMAC
+construction is the same regardless of event type.
+
+## Try it: block builder
+
+Write some mrkdwn text, pick some buttons, and copy the payload straight into
+a webhook/API call. The builder covers `section` and `actions` — for
+`divider`/`image`/`header`/`context`, copy the JSON examples above directly.
+
+<MessageBlockBuilder />
+
+<Cards>
+  <Card title="Integrations API" href="/docs/developer/integrations-api" description="Incoming webhooks, the bot API, and the signing scheme this reuses." />
+  <Card title="For end users" href="/docs/help/integrations" description="Setting up integrations from the workspace UI." />
+</Cards>

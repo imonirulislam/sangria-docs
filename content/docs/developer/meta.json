@@ -9,6 +9,7 @@
     "data-model",
     "notifications-pipeline",
     "integrations-api",
+    "message-components",
     "testing",
     "deployment",
     "contributing"
