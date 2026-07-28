@@ -74,6 +74,36 @@ Your receiver should verify each request before trusting it:
 - **`X-Webhook-Timestamp`** — the time the event was sent. Check it alongside the
   signature when you validate the request.
 
+## Installing an OAuth app
+
+Some apps are built by a developer to be installed into many workspaces,
+rather than hand-created in yours. You'll recognize these by an "Add to
+Sangria" link or button on the app's own site, rather than the create form
+above — or find one already inside Sangria, in **Customize workspace → App
+directory**, if its developer chose to list it there. The directory has a
+category filter (Productivity, DevOps, Communication, and so on) and shows how
+many other workspaces on this deployment already have an app installed;
+clicking a card opens a fuller view with the app's full description and
+exactly what it'll be able to do before you commit to installing it.
+
+1. Click the app's install link (or a card's **Install** button in the app
+   directory) — you'll land on a consent screen (still inside Sangria, not a
+   third-party site).
+2. If you're an admin of more than one workspace, pick which one to install
+   into.
+3. Review what the app will do — it always lists posting messages to a
+   channel you choose, plus any events it's asking to receive (new messages,
+   reactions, or button clicks) — then pick that channel.
+4. **Allow** installs it (same as creating an integration by hand: a bot
+   joins the channel, and the change is audited); **Deny** installs nothing.
+
+An app installed this way shows an **OAuth** badge next to its name in
+**Customize workspace → Integrations**, and works exactly like any other
+integration from there — add it to more channels, regenerate its token to
+revoke access, or remove it entirely. Regenerating the token immediately
+invalidates the credential the app's developer was given; nothing else about
+how you manage it differs from an app you created yourself.
+
 ## Exact request and response details
 
 This page is the overview. For precise request and response shapes, headers, and
@@ -81,6 +111,7 @@ signature verification, see the developer reference.
 
 <Cards>
   <Card title="Integrations API" href="/docs/developer/integrations-api" description="Exact request/response details for webhooks, the bot API, and events." />
+  <Card title="OAuth apps" href="/docs/developer/oauth-apps" description="How the install flow works, for developers building an installable app." />
   <Card title="Channels" href="/docs/help/channels" description="Add and remove apps in the channels they post to." />
   <Card title="Account & security" href="/docs/help/account-and-security" description="Review the audit log of integration changes." />
 </Cards>

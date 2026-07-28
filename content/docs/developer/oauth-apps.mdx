@@ -1,0 +1,157 @@
+---
+title: OAuth apps
+description: Register an app once; any workspace admin can install it via an OAuth consent screen instead of hand-creating a bot.
+---
+
+The [integrations API](/docs/developer/integrations-api) covers apps a workspace
+admin hand-creates for their own workspace, copying a token to whatever server
+they run. **OAuth apps** are the Slack-style alternative: register an app once,
+and any workspace admin can click an "Add to Sangria" link and approve a
+consent screen to install it — no manual bot creation, no copy-pasting a
+token. Sangria itself is the OAuth 2.0 authorization server here (RFC 6749's
+authorization-code grant); your app is the client.
+
+<Callout type="warn" title="v1 scope">
+  No PKCE, no token expiry or refresh tokens (the issued access token behaves
+  like the long-lived bot API token it actually is — revoke it by
+  regenerating), no partial-scope grants (an install approves every event
+  type the app requests, or is denied entirely), no IP-based rate limiting on
+  the token endpoint, and no uninstall webhook back to your app. All
+  intentional v1 cuts, not gaps.
+</Callout>
+
+## Two different hosts
+
+This matters and is easy to get wrong: `/oauth/authorize` is a page on the
+**app's own site** (the browser navigates there); `/oauth/token` is a
+**Convex HTTP action**, served from the Convex deployment's own site URL —
+the same host your incoming webhooks and bot API calls already use. In this
+self-hosted setup that's a different port (`:3211` locally) or a different
+subdomain in production, never the app's own URL.
+
+## 1. Register your app
+
+Go to `/developer/apps` while signed in — this isn't workspace-scoped, so any
+signed-in user can register one. You'll set:
+
+- **Redirect URIs** — exact-match checked at both `/oauth/authorize` and
+  `/oauth/token`. `https://` URIs are accepted from any host;
+  `http://localhost` (or `127.0.0.1`/`::1`) is also accepted, for local
+  development, but no other `http://` host is.
+- **Requested event types** — the subset of `message`/`reaction`/`interaction`
+  your app wants delivered to its **event URL** (shared across every
+  workspace that installs your app — unlike the manually-created integrations
+  flow, where each installation configures its own event URL).
+- **Category** — shown as a filter pill in the app directory (Productivity,
+  Project Management, DevOps, Communication, Analytics, HR, or Other). Purely
+  informational — it doesn't affect who can install the app.
+
+You get back a `client_id` (public) and a `client_secret`, shown **exactly
+once** — only its hash is stored. Lose it and you'll need to regenerate it
+(which invalidates the old one immediately, but never touches any
+already-installed workspace's access token).
+
+Check **"List in every workspace's app directory"** if you want admins to be
+able to discover and install your app from inside Sangria (**Customize
+workspace → App directory**), instead of only via a link on your own site.
+There's no review/approval step — listing is a self-service toggle, since
+this is a self-hosted deployment, not a public multi-tenant marketplace. The
+directory's "Install" button is just a shortcut: it builds the exact same
+`/oauth/authorize` URL below, using your app's first registered redirect URI.
+
+## 2. Send admins to /oauth/authorize
+
+```
+GET https://<your-sangria-host>/oauth/authorize
+  ?client_id=<your client_id>
+  &redirect_uri=<one of your registered redirect URIs, URL-encoded>
+  &state=<opaque value you'll verify on return>
+```
+
+The signed-in admin picks (or is defaulted into, if they're only an admin of
+one) a workspace, sees a consent screen describing what your app will be able
+to do, picks a channel, and clicks **Allow** or **Deny**. If you already know
+which workspace an admin is installing into (e.g. a link generated from
+inside that workspace), add `&workspace_id=<id>` to skip the picker — it's
+still re-validated against the signed-in user's actual admin workspaces
+server-side, so a wrong or spoofed id just falls back to the normal picker
+rather than being trusted outright.
+
+- **Allow** → redirected to your `redirect_uri` with `?code=<...>&state=<...>`.
+  The code is opaque, single-use, and expires in 10 minutes.
+- **Deny** → redirected with `?error=access_denied&state=<...>`, no code.
+
+If `client_id` is unknown/inactive, or `redirect_uri` doesn't exactly match a
+registered URI, the admin sees an error page — Sangria never redirects the
+browser to an unregistered destination.
+
+## 3. Exchange the code for a token
+
+Server-to-server, from your own backend — never the browser:
+
+```bash
+curl -X POST https://<convex-site-url>/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d grant_type=authorization_code \
+  -d code=<the code> \
+  -d redirect_uri=<the exact same redirect_uri you sent to /oauth/authorize> \
+  -d client_id=<your client_id> \
+  -d client_secret=<your client_secret>
+```
+
+Client authentication also accepts HTTP Basic (`Authorization: Basic
+base64(client_id:client_secret)`) instead of the body params — both of RFC
+6749 §2.3.1's methods work, so a generic OAuth client library needs no
+special-casing for Sangria.
+
+```json
+{ "access_token": "<64-hex bot API token>", "token_type": "bearer" }
+```
+
+The `access_token` **is** the installed app's bot API token — the exact same
+credential the manually-created integrations flow already uses for
+`POST /api/messages`. Use it exactly as documented on the
+[integrations API](/docs/developer/integrations-api#bot-api) page.
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| `200` | — | success |
+| `400` | `invalid_request` | missing/malformed params, or not form-encoded |
+| `400` | `unsupported_grant_type` | `grant_type` isn't `authorization_code` |
+| `400` | `invalid_grant` | code expired, already used, or `redirect_uri` doesn't match |
+| `401` | `invalid_client` | unknown `client_id` or wrong `client_secret` |
+| `429` | `slow_down` | rate-limited |
+
+A code is single-use: exchanging it twice returns `invalid_grant` on the
+second attempt, even if the first attempt succeeded moments earlier.
+
+## Reinstalls
+
+Installing the same app into a workspace it's already in reuses the existing
+bot/webhook rather than creating a duplicate — and refreshes that
+installation's subscribed event types to whatever your app currently
+requests. If you add a new requested event type after some workspaces have
+already installed your app, they'll pick it up the next time an admin there
+re-approves the consent screen, not automatically.
+
+## Install analytics
+
+`/developer/apps` shows you, for each app you own: how many workspaces have
+it installed right now, and a 30-day chart of new installs per day. The chart
+is a daily rollup (an overnight cron, same pattern as the workspace analytics
+dashboard) — it's not live-scanning on every page load, so a fresh install
+shows up in the current-count immediately but the chart backfills the next
+day.
+
+## Everything else is the integrations API
+
+Once you have an access token, posting messages, receiving signed events, and
+attaching [interactive components](/docs/developer/message-components) all
+work exactly as documented for a manually-created app — an OAuth install just
+changes how the bot and its token came to exist.
+
+<Cards>
+  <Card title="Integrations API" href="/docs/developer/integrations-api" description="The bot API, incoming webhooks, and outgoing event signing this reuses." />
+  <Card title="Message components" href="/docs/developer/message-components" description="Attach buttons and rich text blocks to a posted message." />
+  <Card title="For end users" href="/docs/help/integrations" description="What installing an app looks like for a workspace admin." />
+</Cards>
