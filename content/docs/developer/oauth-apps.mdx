@@ -12,12 +12,13 @@ token. Sangria itself is the OAuth 2.0 authorization server here (RFC 6749's
 authorization-code grant); your app is the client.
 
 <Callout type="warn" title="v1 scope">
-  No PKCE, no token expiry or refresh tokens (the issued access token behaves
-  like the long-lived bot API token it actually is — revoke it by
-  regenerating), no partial-scope grants (an install approves every event
-  type the app requests, or is denied entirely), no IP-based rate limiting on
-  the token endpoint, and no uninstall webhook back to your app. All
-  intentional v1 cuts, not gaps.
+  No token expiry or refresh tokens (the issued access token behaves like the
+  long-lived bot API token it actually is — revoke it by regenerating), no
+  partial-scope grants (an install approves every event type the app
+  requests, or is denied entirely), no IP-based rate limiting on the token
+  endpoint, and no uninstall webhook back to your app. All intentional v1
+  cuts, not gaps. PKCE **is** supported (see below), just optional rather than
+  required.
 </Callout>
 
 ## Two different hosts
@@ -85,6 +86,26 @@ If `client_id` is unknown/inactive, or `redirect_uri` doesn't exactly match a
 registered URI, the admin sees an error page — Sangria never redirects the
 browser to an unregistered destination.
 
+### PKCE (optional)
+
+Every app here is a confidential client (it has a `client_secret`), so PKCE
+(RFC 7636) isn't required — but it's supported, and worth adding as
+defense-in-depth if your own "Add to Sangria" link is generated server-side:
+
+1. Generate a high-entropy `code_verifier` (43–128 characters) and keep it
+   server-side, tied to this pending install attempt.
+2. Add `&code_challenge=<BASE64URL(SHA256(code_verifier))>&code_challenge_method=S256`
+   to the `/oauth/authorize` URL. Only `S256` is accepted — `plain` is
+   rejected outright, not silently downgraded.
+3. Include the original `code_verifier` (not the challenge) as a
+   `code_verifier` param when you exchange the code in step 3 below.
+
+If you don't send a `code_challenge`, the token exchange doesn't require a
+`code_verifier` either — this is what the in-app directory's one-click
+**Install** button does, since it constructs the `/oauth/authorize` URL
+directly from data already on file and has no server-side process of its own
+to hold a verifier for later.
+
 ## 3. Exchange the code for a token
 
 Server-to-server, from your own backend — never the browser:
@@ -96,7 +117,8 @@ curl -X POST https://<convex-site-url>/oauth/token \
   -d code=<the code> \
   -d redirect_uri=<the exact same redirect_uri you sent to /oauth/authorize> \
   -d client_id=<your client_id> \
-  -d client_secret=<your client_secret>
+  -d client_secret=<your client_secret> \
+  -d code_verifier=<omit unless you sent a code_challenge above>
 ```
 
 Client authentication also accepts HTTP Basic (`Authorization: Basic
@@ -118,7 +140,7 @@ credential the manually-created integrations flow already uses for
 | `200` | — | success |
 | `400` | `invalid_request` | missing/malformed params, or not form-encoded |
 | `400` | `unsupported_grant_type` | `grant_type` isn't `authorization_code` |
-| `400` | `invalid_grant` | code expired, already used, or `redirect_uri` doesn't match |
+| `400` | `invalid_grant` | code expired, already used, `redirect_uri` doesn't match, or (if a `code_challenge` was sent) `code_verifier` is missing/wrong |
 | `401` | `invalid_client` | unknown `client_id` or wrong `client_secret` |
 | `429` | `slow_down` | rate-limited |
 
