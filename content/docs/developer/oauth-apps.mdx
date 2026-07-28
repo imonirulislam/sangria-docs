@@ -165,6 +165,52 @@ dashboard) — it's not live-scanning on every page load, so a fresh install
 shows up in the current-count immediately but the chart backfills the next
 day.
 
+## Slash commands
+
+Your app can declare its own slash command (e.g. `/deploy`) on
+`/developer/apps` — a name, a description, and an optional usage hint. When a
+workspace member types it into the composer, Sangria dispatches it straight
+to your app instead of posting it as a message.
+
+- **Names are globally unique** across every app on this deployment (checked
+  when you add one) and can never be one of the built-in commands
+  (`shrug`, `me`, `remind`, `away`, `active`/`back`, `status`, `dnd`,
+  `invite`, `help`) — this avoids the ambiguity of two different apps'
+  identical command both ending up installed in the same workspace. Up to 10
+  commands per app; a name is lowercase letters/numbers/hyphens, starting
+  with a letter.
+- **Delivery reuses the exact same signed pipeline** as
+  [interactive components](/docs/developer/message-components#the-interaction-event) —
+  fire-and-forget, one delivery to the one app that registered the command,
+  no fan-out. Unlike a button (which needs a separate event-type toggle),
+  registering a command is itself the "deliver this to me" signal — it's
+  delivered to your app's `eventUrl` as long as your installed instance has
+  one configured (no extra subscription step needed).
+- **No synchronous response.** Exactly like button clicks, there's no
+  request/response round-trip or ephemeral reply — react asynchronously via
+  the bot API (`POST /api/messages`) if you want to post something back.
+
+```json
+{
+  "id": "slash_command:<workspaceId>:<memberId>:<name>:<timestamp>",
+  "type": "slash_command",
+  "timestamp": 1731000000000,
+  "workspace": { "id": "<workspaceId>" },
+  "channel": { "id": "<channelId>", "name": "general" },
+  "user": { "memberId": "<memberId>", "name": "Ada" },
+  "command": { "name": "deploy", "text": "production" }
+}
+```
+
+`channel` is present for a channel/thread invocation; a `conversation` field
+(`{ "id": "<conversationId>" }`) is present instead for a DM/group-DM one.
+Signing and verification are identical to every other outgoing event — see
+[Outgoing event subscriptions](/docs/developer/integrations-api#outgoing-event-subscriptions).
+
+If someone types a command name nobody has registered, Sangria posts it as a
+normal message, same as today — nothing changes for plain text or a stray
+`/word`.
+
 ## Everything else is the integrations API
 
 Once you have an access token, posting messages, receiving signed events, and
