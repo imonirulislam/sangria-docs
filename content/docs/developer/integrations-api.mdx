@@ -72,20 +72,30 @@ Delivery lives in `convex/apps/api.ts`.
 ## Outgoing event subscriptions
 
 An app can register an `eventUrl`, a `signingSecret`, and an `eventTypes[]`
-(`message`, `reaction`) via the admin-only `setEventSubscription` mutation. An
-empty URL turns subscriptions off; the secret is minted on first enable and
-returned so the admin can configure their receiver.
+(`message`, `reaction`, `interaction`, `dm_message`) via the admin-only
+`setEventSubscription` mutation. An empty URL turns subscriptions off; the
+secret is minted on first enable and returned so the admin can configure
+their receiver.
 
 Events fire **only from human paths** — the channel branch of `messages.create`,
-`reactions.toggle`, and scheduled channel sends. The bot post paths
-(`api.ts`, `webhook.ts`) deliberately emit nothing, which keeps the system
-loop-safe. Delivery:
+`reactions.toggle`, and scheduled channel sends for `message`/`reaction`; the
+DM branch of `messages.create`/`messages.send` and scheduled DM sends for
+`dm_message`. The bot post paths (`api.ts`, `webhook.ts`) deliberately emit
+nothing, which keeps the system loop-safe. Channel delivery:
 
 1. `enqueueAppEvent` — schedules a dispatch **only if** an app is installed in the
    channel (the common case has none, keeping the send path cheap).
 2. `dispatch` (`internalMutation`) — selects the channel's apps that subscribe to
    the type, **excludes the app's own bot**, and returns the delivered app ids.
 3. The retrying `eventDeliveryPool` workpool → the `deliver` `"use node"` action.
+
+`dm_message` skips steps 1–2 entirely — a DM has no channel to look up
+installed apps against, so `enqueueDmAppEvent` resolves the one specific app
+being DMed directly (is the peer an installed app's bot? does it subscribe to
+`dm_message`?) and enqueues straight to the same `eventDeliveryPool`. Only a
+true 1:1 dispatches — a group DM that happens to include a bot never fires
+this event, same as messaging Sangriabot never does (it has no `eventUrl` to
+deliver to in the first place).
 
 ### Signing
 
@@ -116,7 +126,31 @@ independently. The payload is JSON:
 }
 ```
 
-`reaction` events add a top-level `"reaction": "<emoji>"`. Verify on the receiver:
+`reaction` events add a top-level `"reaction": "<emoji>"`.
+
+A `dm_message` event — someone sent your app's bot a direct message —
+replaces `channel` with `conversation`:
+
+```json
+{
+  "id": "dm_message:<messageId>:<memberId>",
+  "type": "dm_message",
+  "timestamp": 1731000000000,
+  "workspace": { "id": "<workspaceId>" },
+  "conversation": { "id": "<conversationId>" },
+  "user": { "memberId": "<memberId>", "name": "Ada" },
+  "message": { "id": "<messageId>" },
+  "text": "how do I deploy staging?"
+}
+```
+
+It fires for **any** message sent to the bot's DM, not just ones matching a
+particular shape — same breadth as a channel `message` event, just scoped to
+one conversation instead of a channel. There's no synchronous reply: post
+back asynchronously via the bot API (`POST /api/messages`) if you want to
+respond, same as every other event here.
+
+Verify on the receiver:
 
 ```ts
 import { createHmac, timingSafeEqual } from "node:crypto";
