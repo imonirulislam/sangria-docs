@@ -1,0 +1,152 @@
+---
+title: Mattermost migration
+description: Importing a Mattermost workspace's full history into Sangria, end to end.
+---
+
+Built on the shared [data migrations](/docs/developer/data-migrations) framework
+(`migration_id_map`, `account_claim_tokens`). Everything here lives under
+`convex/migration/mattermost/`, with local preprocessing scripts under
+`scripts/migration/mattermost/`.
+
+## 1. Export
+
+`mmctl export create --local` on the Mattermost box (durable and detached from any
+SSH/tmux session — the raw `mattermost export bulk` CLI proved unreliable at scale).
+`mmctl export download <name> <path> --local` retrieves the archive; it must target
+a real bind-mounted path, since a container's `/tmp` is often invisible to `docker
+cp`. The archive is a JSONL interchange format, not Mattermost's internal Postgres
+schema — line `type`s include `channel`, `user`, `post`, `direct_channel`,
+`direct_post`, in that dependency order.
+
+<Callout type="warn">
+  An `emoji` line type exists in Mattermost's export format (`exportCustomEmoji`
+  reads the live emoji list at export time), but the real export this pipeline ran
+  against wrote **zero** of them — confirmed by an exact per-type line count against
+  the actual archive (every other type's count summed to the file's total line
+  count with nothing left over). Don't assume custom emoji come through the export;
+  see [Custom emoji](#5-custom-emoji) below for how they were actually migrated.
+</Callout>
+
+## 2. Local prep
+
+`scripts/migration/mattermost/split-by-team.mjs` splits the full export into one
+`<team>.jsonl` per team with real data, plus a global `direct.jsonl` (DMs aren't
+team-scoped). `prepare-chunks.mjs` then, per team file:
+
+- Converts each post's Markdown into a Quill delta (`markdown-to-delta.mjs`), so
+  formatting survives instead of showing as literal `**bold**` syntax.
+- Resolves each reaction's Mattermost `emoji_name` shortcode to its unicode
+  character (`emoji-resolve.mjs`), against a table sourced directly from
+  Mattermost's own bundled emoji dataset (`emoji-shortcodes.json`, 4,463 names) —
+  not a generic emoji-data package, which resolves common shortcodes to the wrong
+  glyph (e.g. "heart" → 😍 instead of ❤️) by matching a secondary keyword instead
+  of the exact Mattermost name. A name this can't resolve is assumed to be a
+  genuine custom emoji and is left as `:name:` literal text. If reactions were
+  already imported under an earlier, less complete version of this table,
+  `backfill-emoji-reactions.mjs` re-resolves every already-migrated reaction and
+  patches the ones that now match — safe to re-run, it only touches rows still
+  showing a literal `:name:`.
+- **Sorts root posts chronologically** before chunking — the raw export's per-channel
+  post order is not chronological, so without this step messages render out of
+  order even though every insert timestamp looks fine at a glance.
+- Splits into clean 5,000-line chunk files (no partial-line boundaries for the
+  Convex-side importer to worry about).
+
+## 3. Per-workspace import
+
+Each Mattermost team with real data gets its own Sangria workspace (not one giant
+collapsed workspace). Per team:
+
+1. **Audit bot/system identities first** — `verify:listMappedUsernames` plus a look
+   at the team's own `post`/`user` lines for automated accounts (monitoring
+   webhooks, integrations). Add any found to `KNOWN_BOT_USERNAMES` in `import.ts`
+   **before** importing, checked up front rather than per message type — checking it
+   late means the first non-bot-looking message from that identity creates a real
+   member, which silently unblocks every other message from the same bot.
+2. `workspaceSetup:createWorkspaceForTeam` — mirrors `workspaces.create`'s side
+   effects, idempotent via the id-map.
+3. `upload-chunks.mjs <dir> --kickoff <workspaceId>` — mints upload URLs, uploads
+   each chunk to Convex file storage, and starts the run.
+4. `processChunk` (an `internalAction`, since reading a stored blob needs one) reads
+   one chunk, sub-batches its lines by `type` into the entity-import mutations
+   (`importUsersBatch`, `importChannelsBatch`, `importPostsBatch`, …), and
+   self-reschedules until done. A caught error marks the job `"error"` with a
+   message rather than stalling silently.
+5. `verify:countWorkspace` and `verify:checkWorkspaceOrder` (row counts + zero
+   chronological-ordering violations) before trusting the result.
+
+Direct messages aren't team-scoped, so the global DM/group-DM pass runs once,
+separately, after every team workspace exists —
+`resolveDirectChannelWorkspace` intersects a DM's participants against the set of
+already-created migration workspaces and falls back to one umbrella workspace for
+genuinely cross-team conversations.
+
+## 4. Attachments
+
+A post's attachments are inline in its own JSON (`attachments: [{ path }]`), not a
+separate line type, so `insertMessage` enqueues one `migration_pending_attachments`
+row per file right when it creates the message — idempotent for free, since a
+re-run skips posts whose external id is already mapped. `attachments:enqueuePending`
+then drains those through a bounded, retrying Convex Workpool that fetches each
+file directly from S3 (Mattermost's file storage) and stores it in Convex file
+storage; a terminal fetch failure (e.g. a genuinely missing source file) marks the
+row `"error"` instead of retrying forever.
+
+## 5. Custom emoji
+
+Not sourced from the export at all — since it wrote none, custom emoji are pulled
+directly from Mattermost's **live REST API** instead (`import-emoji.mjs`):
+
+- `GET /api/v4/emoji` (paginated) for the name/id list, `GET
+  /api/v4/emoji/{id}/image` per emoji for the actual bytes — the same live model
+  that (unlike the export) does carry a `creator_id`, though this pipeline doesn't
+  use it (see below).
+- The server's nginx blocks any request with no browser-like `User-Agent` (403,
+  regardless of token validity), and separately returns a `Content-Security-Policy`
+  header as an obsolete multi-line/folded value that Node's built-in `fetch` (a
+  strict HTTP/1.1 parser) rejects outright even on a 200 response. The script
+  shells out to `curl` for every Mattermost-side request instead of using `fetch`
+  — curl tolerates both; only the Convex upload-URL `PUT`s use `fetch`.
+- Mattermost's custom emoji are **global to the whole instance**, not per-team —
+  unlike everything else in this pipeline, the same 68 emoji are imported once
+  per *target* workspace (`emoji.ts`'s `importCustomEmojiBatch`), sharing a single
+  uploaded `_storage` blob across every workspace's `custom_emoji` row rather than
+  re-uploading per workspace. Idempotent via `migration_id_map` keyed by
+  `${workspaceId}:${name}` (not just `name` — the same emoji needs its own mapping
+  row per workspace).
+- `custom_emoji.createdBy` is non-optional but neither the export nor a plain
+  name+image live-API fetch carries a creator, so migrated emoji are attributed to
+  each target workspace's own owner — the same "no real actor to attribute this
+  to" precedent as `channels.archivedBy` being left unset for migrated channels.
+
+## 6. Operator tools
+
+- `reset:resetImportedWorkspace` — wipes one workspace's migrated tables (in
+  dependency order), cancels its in-flight attachment fetches, and deletes the
+  attached blobs from `_storage` — not just the rows — so a redo starts from a
+  genuinely clean slate. `migration_id_map` rows for real (non-migration) user
+  accounts are left alone; only workspace-scoped and team-scoped mappings clear.
+- `backfill-emoji-reactions.mjs` — see the reaction-shortcode note in
+  [Local prep](#2-local-prep); safe to re-run against already-migrated data.
+
+## Known gaps
+
+- **Channel creator and creation date aren't in the export.** Mattermost's bulk
+  export `channel` line (`team`, `name`, `display_name`, `type`, `header`,
+  `purpose`, `scheme`, `deleted_at`) carries neither — so migrated channels show
+  "Unknown" for creator and the migration's own insert time for "created on". The
+  live Mattermost REST API/DB does have `creator_id` and `create_at` on the
+  `Channel` model (confirmed while building custom-emoji import above, which reads
+  that same live API); backfilling channels from there is possible but not yet
+  built.
+- **Custom emoji aren't migrated yet.** The export does include an `emoji` line
+  type (`name` + an `image` path into the archive), and Mattermost's custom emoji
+  are global to the whole instance rather than per-team — unlike everything else
+  in this pipeline, they'd need to land in `custom_emoji` (which is
+  workspace-scoped) for every migrated workspace that could reference them. Not yet
+  scoped or built.
+
+<Cards>
+  <Card title="Data migrations" href="/docs/developer/data-migrations" description="The shared migration_id_map / account_claim_tokens framework this is built on." />
+  <Card title="Data model" href="/docs/developer/data-model" description="The custom_emoji table and the rest of the Convex schema." />
+</Cards>

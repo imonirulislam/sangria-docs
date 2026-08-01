@@ -1,0 +1,66 @@
+---
+title: Data migrations
+description: The source-agnostic migration framework shared by every import source.
+---
+
+Sangria can import a workspace's history from an external chat tool. The framework
+itself is **source-agnostic** — a second source reuses the same primitives instead of
+inventing a parallel table. Shared code lives in `convex/migration/idMap.ts`;
+everything specific to one source lives in its own sibling folder (e.g.
+`convex/migration/mattermost/`).
+
+<Callout type="warn">
+  A migration is one-time, destructive-adjacent tooling (it creates real workspaces,
+  users, and messages). Every import runs against the local dev Convex deployment
+  first — the throwaway/dry-run pass **is** the verification step. Production is
+  only touched at cutover, after row counts and a manual spot-check both pass.
+</Callout>
+
+## Why a separate framework, not schema changes
+
+The core product schema (`users`, `channels`, `messages`, …) stays completely
+untouched by migration concerns — no `mattermostId` fields scattered through it for
+what is one-time historical import. Everything external-id-shaped lives in one
+standalone table instead.
+
+### `migration_id_map`
+
+One row per migrated entity, indexed `by_source_kind_externalId`:
+
+| Field | Purpose |
+| --- | --- |
+| `source` | Which external system (`"mattermost"` today). |
+| `kind` | What kind of entity (`"user"`, `"channel"`, `"conversation"`, `"message"`, `"workspace"`, …). |
+| `externalId` | The source system's own identifier for the row (a Mattermost username, a `team:channel` pair, …). |
+| `sangriaId` | The Sangria id it maps to. |
+
+The importer reads this before creating anything — "have I already imported this
+row" makes every import mutation **idempotent** and safe to re-run over
+already-processed data, and it's the traceable record for spot-checking an entity's
+origin later. It's also the whole reason a migration is cheap to undo: drop the rows
+for one `source`/workspace and nothing else in the schema knows a migration ever
+happened.
+
+### `account_claim_tokens`
+
+A general "claim/set up this account" primitive (not tied to any one source):
+`userId`, an unguessable `token`, `expiresAt`, `consumedAt`. A pre-provisioned user
+gets one minted at import time; visiting `/claim-account?token=…` lets them set a
+password without Sangria ever having had one. See `convex/account/claim.ts`.
+
+<Callout type="info">
+  If an imported user's email already matches an existing Sangria account, the
+  importer **merges** — it adds them to the target workspace and never mints a
+  claim token, since they already have a working sign-in.
+</Callout>
+
+## Sources built on this framework
+
+<Cards>
+  <Card title="Mattermost migration" href="/docs/developer/data-migrations/mattermost" description="The full import pipeline, end to end — export, prep, per-workspace import, attachments, verification." />
+</Cards>
+
+<Cards>
+  <Card title="Data model" href="/docs/developer/data-model" description="The full Convex schema, table by table." />
+  <Card title="Conventions" href="/docs/developer/conventions" description="Public vs internal functions, backend-cost rules, the Definition of Done." />
+</Cards>

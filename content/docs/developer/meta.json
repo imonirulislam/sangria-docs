@@ -8,6 +8,7 @@
     "conventions",
     "data-model",
     "notifications-pipeline",
+    "data-migrations",
     "integrations-api",
     "message-components",
     "oauth-apps",
