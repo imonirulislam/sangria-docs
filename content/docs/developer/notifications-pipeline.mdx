@@ -77,6 +77,42 @@ task per device into `pushDeliveryPool` (a Convex Workpool). The pool caps
 subscriptions are deactivated rather than retried. Enqueuing happens inside the
 worker's transaction, so it's atomic with the in-app write.
 
+Each task runs `deliverPush`, which routes on the subscription's `platform`:
+
+- **Web** (browsers + the desktop app) goes out over **web-push** with the VAPID
+  keys. A `404`/`410` means the subscription is permanently gone, so it's
+  deactivated; anything else (429 / 5xx / network) rethrows and the pool retries.
+- **Native** (`ios` / `android`) carries an FCM/APNs device token instead of
+  web-push keys, so it's handed to a native sender.
+
+### Native send — FCM now, APNs scaffolded
+
+`deliverNative` handles the mobile apps:
+
+- **Android → FCM HTTP v1.** It mints a short-lived OAuth2 access token from the
+  `FCM_SERVICE_ACCOUNT_JSON` service account (a signed JWT via `jose`), then POSTs
+  the message to `https://fcm.googleapis.com/v1/projects/<project-id>/messages:send`.
+  There's no token cache — fan-out is one action per subscription (often a cold
+  isolate), so a module-level cache wouldn't survive anyway; one cheap token
+  exchange per send is the trade. FCM v1 also requires every `data` value to be a
+  **string**, so the payload is coerced at the boundary before it goes out.
+- **iOS → APNs** is scaffolded but not wired — it returns early (gated on
+  `APNS_AUTH_KEY`) until the Apple credentials land.
+
+Failures are classified by `classifyFcmError` on the FCM **`errorCode`**, not the raw
+HTTP status, into `deactivate` / `drop` / `retry`:
+
+- `UNREGISTERED` / `SENDER_ID_MISMATCH` → **deactivate** the dead token.
+- `INVALID_ARGUMENT` / `THIRD_PARTY_AUTH_ERROR` → **drop** this one send, no retry.
+- `QUOTA_EXCEEDED` / `UNAVAILABLE` / `INTERNAL` (and 429 / 401 / 403 / 5xx) →
+  **retry** (rethrow so the pool backs off).
+
+<Callout type="warn">
+  A malformed message (`INVALID_ARGUMENT`) is **dropped, never deactivated**. It's a
+  formatting bug in a single send, not a dead device — deactivating on it would let
+  one bad payload wipe out every healthy subscription in the fan-out.
+</Callout>
+
 ## The stuck-event sweep
 
 A scheduled mutation that throws is **not** auto-retried, which would strand its

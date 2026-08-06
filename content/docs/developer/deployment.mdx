@@ -127,6 +127,11 @@ bunx convex env set LIVEKIT_API_SECRET <same as .env.prod>
 bunx convex env set VAPID_PUBLIC_KEY <web-push public key>
 bunx convex env set VAPID_PRIVATE_KEY <web-push private key>
 bunx convex env set VAPID_SUBJECT mailto:you@imonirulislam.dev
+
+# Native push for the mobile apps. Android delivers via FCM HTTP v1 using the
+# Firebase service-account JSON — paste the whole file (it's a secret, never commit
+# it). iOS/APNs is scaffolded but not wired, so leave APNS_AUTH_KEY unset for now.
+bunx convex env set FCM_SERVICE_ACCOUNT_JSON -- "$(cat firebase-service-account.json)"
 ```
 
 ## GitHub configuration
@@ -135,6 +140,10 @@ bunx convex env set VAPID_SUBJECT mailto:you@imonirulislam.dev
 
 - `DOMAIN` — e.g. `imonirulislam.dev`
 - `NEXT_PUBLIC_APP_NAME` — e.g. `Sangria` (optional)
+- `NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED` — set to `true` only on the demo deploy to
+  mount Vercel Analytics + Speed Insights; leave it unset (or `false`) in
+  production. It's baked into the app image as a build arg, so it's decided
+  per-deployment, not at runtime.
 
 **Secrets:**
 
@@ -160,6 +169,18 @@ bunx convex env set VAPID_SUBJECT mailto:you@imonirulislam.dev
 Re-run the workflow for an older tag, or on the server (`cd /opt/sangria/deploy`)
 set `IMAGE_TAG` in `.env.prod` to a previous tag and re-run
 `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`.
+
+## Inspecting the gateway (Kong Manager)
+
+The **dev** compose bundles **Kong Manager** — Kong's OSS admin GUI — at
+`https://manager.sangria.localhost`, behind HTTP basic auth (`admin` / `sangria-dev`,
+defined in `deploy/kong.yml`; change it for anything shared). The gateway's own admin
+(`:8001`) and GUI (`:8002`) listeners are both routed under that one host, so the
+GUI's Admin API calls stay same-origin behind a single auth prompt. Because the
+gateway runs **DB-less** (the declarative `kong.yml`), the Manager is **read-only** —
+handy for inspecting services, routes, plugins, and upstreams, but you change them by
+editing the YAML. The same listeners can be exposed in prod behind Cloudflare Access
+if you want the console there too.
 
 ## Operational notes
 
