@@ -10,6 +10,7 @@
     "direct-messages",
     "messages",
     "slash-commands",
+    "keyboard-shortcuts",
     "huddles",
     "notifications",
     "search",
