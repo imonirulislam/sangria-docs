@@ -128,6 +128,26 @@ bunx convex env set VAPID_PUBLIC_KEY <web-push public key>
 bunx convex env set VAPID_PRIVATE_KEY <web-push private key>
 bunx convex env set VAPID_SUBJECT mailto:you@imonirulislam.dev
 
+# Social sign-in (all optional). A provider is only offered on the sign-in screen
+# when both of its vars are set, so set them in pairs or not at all. Register
+# <SITE_URL>/api/auth/callback/<provider-id> with each provider.
+bunx convex env set AUTH_GOOGLE_ID <client id>
+bunx convex env set AUTH_GOOGLE_SECRET <client secret>
+bunx convex env set AUTH_GITHUB_ID <client id>
+bunx convex env set AUTH_GITHUB_SECRET <client secret>
+bunx convex env set AUTH_GITLAB_ID <client id>
+bunx convex env set AUTH_GITLAB_SECRET <client secret>
+# Microsoft: TENANT_ID is optional and defaults to "common" (any Microsoft account);
+# set your directory id to restrict sign-in to one organisation.
+bunx convex env set AUTH_MICROSOFT_ENTRA_ID_ID <client id>
+bunx convex env set AUTH_MICROSOFT_ENTRA_ID_SECRET <client secret>
+bunx convex env set AUTH_MICROSOFT_ENTRA_ID_TENANT_ID <directory id>
+# Apple's client secret is a JWT generated from a .p8 key and expires within six
+# months, so it has to be regenerated on a schedule. Apple also rejects
+# http/localhost redirects, so this one can't be tested in local dev.
+bunx convex env set AUTH_APPLE_ID <services id>
+bunx convex env set AUTH_APPLE_SECRET <generated JWT>
+
 # Native push for the mobile apps. Android delivers via FCM HTTP v1 using the
 # Firebase service-account JSON — paste the whole file (it's a secret, never commit
 # it). iOS/APNs is scaffolded but not wired, so leave APNS_AUTH_KEY unset for now.

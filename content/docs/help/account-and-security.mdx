@@ -75,13 +75,29 @@ you'll need a current code to do it.
 ### Signing in with 2FA on
 
 After your password, you'll be asked for the current 6-digit code before you're
-let in. Lost your device? Choose **Use a recovery code** instead.
+let in. A wrong code tells you so right under the boxes; too many wrong ones pause
+the attempts for a few minutes. Lost your device? Choose **Use a recovery code**
+instead.
+
+### One setup covers every workspace
+
+Two-factor belongs to your **account**, not to a workspace. You scan one QR code,
+keep one set of recovery codes, and that same authenticator entry works everywhere
+you sign in. Once you've entered a code, you won't be asked again for the rest of
+that session, even if you switch workspaces.
+
+What *is* per workspace is whether 2FA is **demanded**. So turning it on because
+one workspace requires it means every other workspace will ask you for a code too
+— and turning it off is an account-wide change you make from Account settings, not
+something that happens by leaving a workspace.
 
 ### Workspaces that require 2FA
 
 An admin can make 2FA **required** for a workspace (see
 [Workspaces](/docs/help/workspaces)). If you open a workspace that requires it and
 haven't set up 2FA yet, you'll be prompted to set it up before you can continue.
+The screen names the workspace that's asking, so you can tell which one triggered
+it.
 
 ### Turning it off
 
@@ -93,10 +109,18 @@ confirm, so nobody on an unattended session can quietly remove it.
 If you lose your authenticator **and** your recovery codes, a workspace admin can
 **reset your two-factor** from **Members** management — that clears it from your
 account so you can set it up fresh next time you sign in. Contact an admin to do
-this. Admins: the action lives in the ⋯ menu next to a member (and shows for any
-member who has 2FA on, including the primary owner); it's recorded in the audit
-log. (Passkeys are a separate sign-in method, not 2FA — a reset leaves them
-alone.)
+this. **Sangriabot sends you a direct message** whenever this happens, so a reset
+you didn't ask for never passes unnoticed.
+
+Admins: the action lives in the ⋯ menu next to a member (and shows for any member
+who has 2FA on, including the primary owner); it's recorded in the audit log.
+(Passkeys are a separate sign-in method, not 2FA — a reset leaves them alone.)
+
+<Callout type="warn" title="A reset covers the person's whole account">
+  Because 2FA is per account, resetting it also removes it from any **other**
+  workspace that person belongs to — not just yours. Use it when someone has
+  genuinely lost their authenticator, and expect them to be notified.
+</Callout>
 
 ## Passkeys
 
