@@ -40,6 +40,13 @@ docker run --rm -p 3002:3002 sangria-docs   # http://localhost:3002/docs/help
 The app reaches the docs via `NEXT_PUBLIC_DOCS_URL` (set to
 `https://docs.sangria.localhost` in the compose stack; override for other envs).
 
+This repo reads the same variable for its own public origin, which `sitemap.xml` and
+the `Sitemap:` line in `robots.txt` need as an absolute URL. On Vercel it's derived
+from `VERCEL_PROJECT_PRODUCTION_URL` automatically. Anywhere else, pass it at **build**
+time — `NEXT_PUBLIC_*` is inlined during the build, so a runtime value in compose
+arrives too late. Without it the sitemap is empty and robots.txt omits the line,
+rather than publishing URLs for a domain that isn't yours.
+
 ## Write a page
 
 1. Add an `.mdx` file under `content/docs/help/` or `content/docs/developer/`.
