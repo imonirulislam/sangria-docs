@@ -97,6 +97,22 @@ row `"error"` instead of retrying forever.
 Not sourced from the export at all — since it wrote none, custom emoji are pulled
 directly from Mattermost's **live REST API** instead (`import-emoji.mjs`):
 
+```bash
+MATTERMOST_API_TOKEN=<personal-access-token> \
+  node scripts/migration/mattermost/import-emoji.mjs \
+  <mattermost-base-url> <workspaceId1,workspaceId2,...>
+```
+
+Run it once, after every target workspace exists — it takes their ids, and each one
+needs its own rows. Safe to re-run: already-imported emoji come back as `skipped`.
+The token is a Mattermost Personal Access Token, read from the env var only (never a
+CLI arg, never a file — same rule as the attachments pipeline's S3 credentials).
+`npx convex run` must reach the target deployment, which is whatever
+`CONVEX_SELF_HOSTED_URL` / `CONVEX_SELF_HOSTED_ADMIN_KEY` point at in `.env.local`
+— **dev by default**, so check it before running against production.
+
+How it works:
+
 - `GET /api/v4/emoji` (paginated) for the name/id list, `GET
   /api/v4/emoji/{id}/image` per emoji for the actual bytes — the same live model
   that (unlike the export) does carry a `creator_id`, though this pipeline doesn't
