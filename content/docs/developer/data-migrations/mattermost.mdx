@@ -139,12 +139,6 @@ directly from Mattermost's **live REST API** instead (`import-emoji.mjs`):
   `Channel` model (confirmed while building custom-emoji import above, which reads
   that same live API); backfilling channels from there is possible but not yet
   built.
-- **Custom emoji aren't migrated yet.** The export does include an `emoji` line
-  type (`name` + an `image` path into the archive), and Mattermost's custom emoji
-  are global to the whole instance rather than per-team — unlike everything else
-  in this pipeline, they'd need to land in `custom_emoji` (which is
-  workspace-scoped) for every migrated workspace that could reference them. Not yet
-  scoped or built.
 
 <Cards>
   <Card title="Data migrations" href="/docs/developer/data-migrations" description="The shared migration_id_map / account_claim_tokens framework this is built on." />
