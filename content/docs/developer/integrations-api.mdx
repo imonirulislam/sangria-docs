@@ -165,13 +165,26 @@ function verify(rawBody: string, headers: Headers, secret: string) {
 }
 ```
 
-### SSRF protection
+### Outbound request policy
 
-The event URL must be `https` and non-internal. `convex/shared/safeFetch.ts`
-(`safeFetchUrl`, `isBlockedHost`, `isPrivateIp`) vets it at save time. The
-`deliver` action re-vets the URL, **re-resolves the host via DNS** and refuses any
-private resolved IP, and fetches with `redirect: "manual"` so it can't be bounced
-to an internal target. The residual DNS-rebinding TOCTOU is documented in the code.
+The event URL must be `https` and must not name an internal host.
+`convex/shared/safeFetch.ts` (`safeFetchUrl`, `isBlockedHost`, `isPrivateIp`)
+vets it at save time from the URL alone.
+
+Delivery vets it again, since a URL can outlive the rule that allowed it.
+`vetFetchUrl` (`convex/shared/dnsGuard.ts`) resolves the host and refuses the
+delivery if any resolved address is internal. `requestPinned`
+(`convex/shared/pinnedFetch.ts`) then connects to that resolved address instead
+of looking the name up a second time, and never follows redirects. TLS is
+unaffected — certificate validation still uses the hostname from the URL.
+
+<Callout type="warn" title="Your event URL must be publicly resolvable">
+  Private ranges, `localhost` and names that don't resolve are all refused at
+  delivery, so an event URL can't point at a local dev server — use a tunnelling
+  service while developing. This is separate from **redirect URIs**, where
+  `http://localhost` *is* accepted: those are opened in a browser, never fetched
+  by the server.
+</Callout>
 
 ## Audit
 
