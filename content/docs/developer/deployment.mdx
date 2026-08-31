@@ -128,6 +128,16 @@ bunx convex env set VAPID_PUBLIC_KEY <web-push public key>
 bunx convex env set VAPID_PRIVATE_KEY <web-push private key>
 bunx convex env set VAPID_SUBJECT mailto:you@imonirulislam.dev
 
+# Transactional email. NOT optional if you want email+password sign-in: the
+# first password sign-in on an account sends a confirmation code, and a
+# deployment that can't send mail leaves those users unable to get in. Also
+# carries workspace invitations. Pick one provider and set its vars.
+bunx convex env set EMAIL_PROVIDER resend        # or "ses" / "smtp"
+bunx convex env set EMAIL_FROM notifications@imonirulislam.dev
+bunx convex env set RESEND_API_KEY <api key>
+# ses:  SES_REGION / SES_ACCESS_KEY_ID / SES_SECRET_ACCESS_KEY
+# smtp: SMTP_HOST / SMTP_PORT (default 587) / SMTP_USER / SMTP_PASSWORD
+
 # Social sign-in (all optional). A provider is only offered on the sign-in screen
 # when both of its vars are set, so set them in pairs or not at all. Register
 # <SITE_URL>/api/auth/callback/<provider-id> with each provider.
