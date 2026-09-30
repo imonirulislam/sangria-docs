@@ -9,7 +9,8 @@ not in.
 
 ## Run a search
 
-1. Open search from the top of the app and type what you're looking for.
+1. Click the search bar in the middle of the top toolbar (on a phone, tap **Search** in
+   the bottom bar) and type what you're looking for.
 2. Sangria matches your terms against message text and shows results
    **newest-first**.
 3. Results are **paginated** — keep scrolling to load older matches.
@@ -20,8 +21,10 @@ Type these filters right into the query box, alongside your search terms, to
 scope where Sangria looks:
 
 - **`in:#channel-name`** — limit results to a single channel.
+- **`in:@person`** — limit results to your direct message with that person.
 - **`from:@person`** — only messages sent by that person.
-- **`to:@person`** — only messages in your direct message with that person.
+- **`to:@person`** — only the messages *you* sent in your direct message with that
+  person.
 
 You can combine a filter with search terms — for example,
 `in:#marketing launch date` finds messages containing "launch date" in the
@@ -37,8 +40,13 @@ You can combine a filter with search terms — for example,
 
 - **Start broad, then filter.** Type a keyword first, then add `from:@person` or
   `in:#channel-name` to cut the list down.
-- **Looking for a DM?** Use `to:@person` to jump straight into that conversation's
+- **Looking for a DM?** Use `in:@person` to jump straight into that conversation's
   history.
+- **Search from where you are.** The search button in a channel's or 1:1 DM's header
+  opens search already scoped to that conversation.
+- **Looking for a channel or person, not a message?** Press **⌘ J** (**Ctrl + J** on
+  Windows and Linux) — the hint shown in the search bar — to open the quick switcher
+  instead.
 - **Order is fixed.** Results always come back newest-first, so the most recent
   match is at the top.
 
