@@ -29,9 +29,10 @@ The site labels which is which.
 
 ## How it stays in sync
 
-The app owns the code. The design-system repo holds a copy of
-`src/components/ui/*`, `src/lib/themes.ts` and the `@layer base` token block of
-`src/app/globals.css`, so it can build without the app.
+The app owns the code. The design-system repo holds verbatim copies of
+`src/components/ui/*`, `src/lib/themes.ts`, `src/lib/accent.ts`,
+`src/components/native-select.tsx`, `tailwind.config.ts` and the `@layer base`
+token block of `src/app/globals.css`, so it can build without the app.
 
 ```bash
 bun run check:sync   # in sangria-design-system; fails on any difference from ../sangria
@@ -39,9 +40,8 @@ bun run verify       # typecheck + check:sync + build
 ```
 
 Design changes start there, get ported to the app, and the copies are then
-re-copied. If you change a primitive, the theme file or the token block in the
-app, re-copy it to the design-system repo in the same change, or `check:sync`
-fails.
+re-copied. If you change any of those files in the app, re-copy it to the
+design-system repo in the same change, or `check:sync` fails.
 
 ## Building blocks worth knowing
 
@@ -67,5 +67,6 @@ fails.
 ## Deploying the site
 
 It's a static export served by a Cloudflare static-assets Worker, like the
-marketing site. From the design-system repo, `bun run deploy` builds and uploads
-it; the Worker's custom domain is `design.sangria.chat`.
+marketing site. From the design-system repo, `bun run deploy` runs `verify` and
+then uploads it, so a drifted copy never ships. The Worker's custom domain is
+`design.sangria.chat`. Pushing to `main` doesn't deploy it.
