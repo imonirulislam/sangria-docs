@@ -1,0 +1,71 @@
+---
+title: Design system
+description: Where Sangria's tokens, primitives, patterns and wireframes live, and how they stay in step with the app.
+---
+
+The design system is a separate site that shows Sangria's visual decisions in
+one place: semantic tokens, the workspace themes, every UI primitive in each of
+its variants and states, composed patterns such as the message row and composer,
+and whole-screen wireframes at desktop and phone widths.
+
+- **Live site:** [design.sangria.chat](https://design.sangria.chat)
+- **Source:** the private `sangria-design-system` repository, a Next.js app with
+  no backend.
+
+## What's on it
+
+| Page | What it shows |
+| --- | --- |
+| Tokens | Semantic colour tokens, the type scale, surfaces and depth, the theme accent variables, and every workspace theme |
+| Components | Every primitive in `src/components/ui`, rendered from the app's own files |
+| Patterns | The shell, channel list, message row, composer, hover toolbar, thread chip and huddle card, switchable across all workspace themes |
+| States | Rest, hover, active, selected, focus and disabled for rows, reactions, badges and buttons |
+| Wireframes | Whole screens at desktop and phone widths |
+
+Primitives are the app's real components, so a variant that renders wrong there
+renders wrong in the product. Patterns are presentational replicas, because the
+shipped message, composer and sidebar components need a Convex backend to mount.
+The site labels which is which.
+
+## How it stays in sync
+
+The app owns the code. The design-system repo holds a copy of
+`src/components/ui/*`, `src/lib/themes.ts` and the `@layer base` token block of
+`src/app/globals.css`, so it can build without the app.
+
+```bash
+bun run check:sync   # in sangria-design-system; fails on any difference from ../sangria
+bun run verify       # typecheck + check:sync + build
+```
+
+Design changes start there, get ported to the app, and the copies are then
+re-copied. If you change a primitive, the theme file or the token block in the
+app, re-copy it to the design-system repo in the same change, or `check:sync`
+fails.
+
+## Building blocks worth knowing
+
+- **One themed frame.** The workspace theme paints the toolbar, icon rail and
+  gutters as one surface. The channel list, main content and thread float on it
+  as rounded (12px) panels with 6px gaps.
+- **Theme accent variables.** The workspace shell sets `--theme-accent` (the
+  accent for the current light/dark mode) and `--theme-badge` (the light accent,
+  for badges on the dark frame). They're set on both the shell root and `<html>`,
+  so sheets and dialogs that portal to `<body>` pick them up too. Always write
+  them with a fallback: `var(--theme-accent, hsl(var(--primary-accent)))`.
+- **Accent helpers** in `src/lib/accent.ts`: `accentText`, `accentTintBg`,
+  `accentBorder`, and `accentSelected` (accent text on a tint that stays tinted
+  under the pointer). Use `accentSelected` for selected rows, tabs and picker
+  options instead of hardcoded blues.
+- **`NativeSelect`** in `src/components/native-select.tsx` for any native
+  `<select>`. Browsers treat a click on a select as keyboard focus, so it signals
+  focus with a border shift instead of a ring.
+- **Contrast on accent fills.** Dark-mode accents are light pastels, so anything
+  filled with the accent (send button, schedule caret) switches to a dark
+  foreground (`#16090e`) in dark mode.
+
+## Deploying the site
+
+It's a static export served by a Cloudflare static-assets Worker, like the
+marketing site. From the design-system repo, `bun run deploy` builds and uploads
+it; the Worker's custom domain is `design.sangria.chat`.

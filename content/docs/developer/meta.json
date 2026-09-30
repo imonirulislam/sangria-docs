@@ -6,6 +6,7 @@
     "index",
     "architecture",
     "conventions",
+    "design-system",
     "data-model",
     "notifications-pipeline",
     "data-migrations",
