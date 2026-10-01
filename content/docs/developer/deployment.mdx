@@ -32,16 +32,27 @@ browser-facing host stays proxied (orange-clouded)**. LiveKit media uses IP ICE
 candidates, not the hostname, so keeping the LiveKit host proxied for signaling is
 fine — the media still flows straight to the server.
 
-## The pipeline
+## Releasing
 
-`.github/workflows/deploy.yml` (in the app repo) runs on a `v*` tag or a manual
-dispatch, in three jobs:
+Production deploys are manual; there is no deploy workflow. A release is three steps:
 
-1. **build-and-push** — builds the Dockerfile `production` target with the
-   `NEXT_PUBLIC_*` values as build args and pushes `ghcr.io/imonirulislam/sangria-app`.
-2. **deploy** — SSHes to the server, checks out the release, renders the Kong and
-   LiveKit templates, then `docker compose pull && up -d`.
-3. **convex-deploy** — pushes `convex/` functions to the self-hosted backend.
+1. **Build and push the app image.** Build the Dockerfile `production` target with
+   the `NEXT_PUBLIC_*` values as build args, tag it
+   `ghcr.io/imonirulislam/sangria-app:<tag>`, and push it.
+2. **Restart the stack on the server.** In `/opt/sangria/deploy`, set `IMAGE_TAG` in
+   `.env.prod` to the new tag, render the Kong and LiveKit configs, then pull and
+   start:
+
+   ```bash
+   envsubst '${DOMAIN}' < kong.prod.yml > kong.gen.yml
+   envsubst '${LIVEKIT_API_KEY} ${LIVEKIT_API_SECRET}' < livekit.prod.yaml > livekit.gen.yaml
+   docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+   ```
+
+3. **Push the Convex functions.** With `CONVEX_SELF_HOSTED_URL` and
+   `CONVEX_SELF_HOSTED_ADMIN_KEY` pointing at production, run `bunx convex deploy -y`.
+   New functions return 404 until this runs.
 
 The docs image is built by its own workflow in the `sangria-docs` repo
 (`.github/workflows/build-image.yml`) and pulled by the app's prod compose.
@@ -166,6 +177,10 @@ bunx convex env set FCM_SERVICE_ACCOUNT_JSON -- "$(cat firebase-service-account.
 
 ## GitHub configuration
 
+There's no production deploy workflow, so the `DEPLOY_*` and `GHCR_PULL_TOKEN`
+secrets below are unused unless you add one back. The build variables are still the
+values to pass when you build the image.
+
 **Variables** (Settings → Secrets and variables → Actions → Variables):
 
 - `DOMAIN` — e.g. `imonirulislam.dev`
@@ -185,19 +200,16 @@ bunx convex env set FCM_SERVICE_ACCOUNT_JSON -- "$(cat firebase-service-account.
 ## Deploying
 
 <Callout type="warn">
-  **First deploy** — before the first tag, make sure both images can be pulled:
-  push the `sangria-docs` repo's `main` (its *Build docs image* workflow publishes
-  the docs image) and set all the GitHub variables/secrets above. The first tag
-  then builds the app image and brings up the full stack (app, docs, gateway).
+  **First deploy:** before the first release, make sure both images can be pulled.
+  Push the `sangria-docs` repo's `main` (its *Build docs image* workflow publishes
+  the docs image), then follow [Releasing](#releasing) to build the app image and
+  bring up the full stack (app, docs, gateway).
 </Callout>
-
-- **Release:** push a tag — `git tag v1.0.0 && git push origin v1.0.0`.
-- **Manual:** Actions → *Deploy (production)* → Run workflow.
 
 ## Rollback
 
-Re-run the workflow for an older tag, or on the server (`cd /opt/sangria/deploy`)
-set `IMAGE_TAG` in `.env.prod` to a previous tag and re-run
+On the server (`cd /opt/sangria/deploy`), set `IMAGE_TAG` in `.env.prod` to a
+previous tag and re-run
 `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`.
 
 ## Inspecting the gateway (Kong Manager)
