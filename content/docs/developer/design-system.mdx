@@ -63,6 +63,13 @@ design-system repo in the same change, or `check:sync` fails.
 - **Contrast on accent fills.** Dark-mode accents are light pastels, so anything
   filled with the accent (send button, schedule caret) switches to a dark
   foreground (`#16090e`) in dark mode.
+- **Contrast on accent text.** `accentText` isn't the raw accent: it's mixed 70%
+  with black in light mode and 60% with white in dark, because the raw accent
+  misses 4.5:1 on its own tint for about half the themes. Use it rather than
+  `var(--theme-accent)` for any accent-coloured text.
+- **Focus rings are `focus-visible`, never `focus`.** Sheets and dialogs focus their
+  close button when they open, so a `focus:` ring flashes on it after a tap. Use
+  `focus-visible:ring-*` so the ring only appears for keyboard users.
 
 ## Deploying the site
 
