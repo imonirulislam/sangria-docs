@@ -3,7 +3,9 @@ title: Data model
 description: The Convex schema grouped by feature area, with the purpose of each table.
 ---
 
-The schema lives in `convex/schema.ts`. Every table is workspace-scoped (most carry
+The schema is assembled in `convex/schema.ts` from table definitions grouped by area in
+`convex/models/` (`users`, `workspace`, `messaging`, `notifications`, `apps`, `huddles`,
+`migration`). Every table is workspace-scoped (most carry
 a `workspaceId`), and enums that drive the validators come from
 `convex/shared/enums.ts`. Tables are grouped below by feature area.
 
