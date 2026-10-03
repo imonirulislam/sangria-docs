@@ -1,0 +1,125 @@
+---
+title: Public IDs
+description: Opaque, unguessable ids for everything that appears in a URL or crosses the app boundary — never the raw document id.
+---
+
+Every id that appears on a **public-facing surface** — a URL, a permalink, a
+file link, or a payload sent to a third-party integration — is a random, opaque
+**public id**, not the Convex document `_id`. The real `_id` never leaves the
+server.
+
+## Why
+
+A document `_id` is the primary key the whole backend keys on. Putting it in a
+URL or an outbound payload:
+
+- ties your public surface to your storage layout,
+- hints at how records are shaped and counted,
+- and ends up copied into chats, logs and screenshots — the least controlled
+  string in the product.
+
+A public id carries none of that. It is **not** an encoding of the `_id` (there
+is nothing to decrypt); it is random.
+
+## The scheme
+
+In `convex/shared/publicId.ts`:
+
+- `generatePublicId(length = 12)` — random base62 (~71 bits) from
+  `crypto.getRandomValues`.
+- `allocatePublicId(exists, length)` — generates and retries until the table's
+  `by_public_id` index confirms the candidate is free. Collisions are
+  astronomically unlikely; the check also catches one allocated moments earlier
+  in the same transaction.
+
+Each entity that needs one carries a `publicId: v.optional(v.string())` field and
+a `by_public_id` index, plus a one-line `allocateXPublicId(ctx)` allocator and
+(where URLs are built server-side) an `xUrlId(ctx, id)` resolver.
+
+<Callout type="info">
+  `publicId` is optional on the schema only so rows predating the backfill still
+  validate. Every new row sets it, and the backfill fills the rest.
+</Callout>
+
+## Which entities, and where they surface
+
+| Entity | Appears as |
+| --- | --- |
+| Workspace | `/w/<id>`, `/cw/<id>`, `/join/<id>` |
+| Channel | `/w/<w>/c/<id>` |
+| Member (1:1 DM) | `/w/<w>/d/<id>` |
+| Conversation (group DM) | `/w/<w>/d/<id>` |
+| Message | `?message=<id>`, `?parentMessageId=<id>`, `/api/files/<id>/<storageId>` |
+| Huddle | `/huddle/<id>` |
+
+Internal references — foreign keys, the arguments one query passes to another,
+`forwardedFrom` — keep the real `_id`. An id the client never sees gains nothing
+from being hidden. **The internal-vs-public line is drawn per field, on purpose.**
+
+## Resolving a URL back to real ids
+
+`resolveRoute` (`convex/workspace/routing.ts`) takes the opaque ids from a URL and
+returns the real ids in **one membership-gated query**:
+
+- It verifies the caller is a member of the workspace, and that each child id
+  (channel / member / conversation / message) belongs to that workspace — no
+  cross-tenant resolution.
+- It returns the **same `null`** for "doesn't exist" and "you're not allowed," so
+  a URL can't be used to probe what exists (no existence oracle).
+- On the client it's primed from already-loaded lists (channels, members,
+  conversations), so warm navigation needs no extra round trip; only a cold deep
+  link hits the query.
+
+Two flows can't use `resolveRoute`:
+
+- **Join** — the visitor isn't a member yet, so `workspaces.getInfoByPublicId`
+  resolves the workspace (returning the real `_id` the join mutation needs) under
+  an auth-only gate.
+- **Building a permalink from a rendered message** — the client already holds the
+  `_id` and needs the public id; `messaging.files.publicIdOf` does the
+  `_id` → public-id direction, gated on read access to the message's container.
+
+## The file route
+
+Attachments are served at `/api/files/<messagePublicId>/<storageId>` — the message
+segment is the public id; the storage id is kept so the route can authorize the
+file against the message it was posted in.
+
+## Integration payloads
+
+Every id in an outgoing event / interaction / slash-command payload is a public
+id (workspace, channel, conversation, member, message), and the bot API resolves
+the posted `channel` by its public id or name — never a raw `_id`. See
+[Integrations API](/docs/developer/integrations-api).
+
+## Backfill
+
+Existing rows are filled by `convex/migration/backfillPublicIds.ts` — one
+self-rescheduling `internalMutation` per table that paginates, skips rows that
+already have an id, and allocates the rest. Run once per environment after the
+schema deploys:
+
+```bash
+npx convex run migration/backfillPublicIds:backfillWorkspaces '{}'
+# then: backfillChannels, backfillMembers, backfillConversations,
+#       backfillMessages, backfillHuddles
+```
+
+<Callout type="warn" title="messages is large">
+  Its backfill uses a smaller page size, and completeness is checked with a
+  paginated `countMissingMessages` rather than a whole-table scan.
+</Callout>
+
+## Adding a new public-facing entity
+
+1. Add `publicId: v.optional(v.string())` and `.index("by_public_id", ["publicId"])`
+   to the table in `convex/models/`.
+2. Add an `allocateXPublicId(ctx)` helper (mirror `channelPublicId.ts`).
+3. Allocate it at **every** insert path for that table.
+4. Resolve it — extend `resolveRoute` for in-workspace URLs, or add a dedicated
+   gated resolver for non-member flows (as `getInfoByPublicId` does for join).
+5. Add a `backfillX` to `backfillPublicIds.ts` and run it per environment.
+6. Build URLs through `routes.*` with the public id; keep internal references on
+   the `_id`.
+7. Test in order: anonymous rejected → non-member / cross-tenant rejected → happy
+   path → edge cases.

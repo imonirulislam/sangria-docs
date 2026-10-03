@@ -50,9 +50,10 @@ curl -X POST https://<host>/api/messages \
   -d '{"channel":"general","text":"Deploy finished"}'
 ```
 
-`channel` is resolved to one of the app's own channels **by id or by name**; the
-bot may only post where it has been added. The response body is empty — read the
-HTTP status. Auth is the app's `apiToken` (rolled with `regenerateApiToken`).
+`channel` is resolved to one of the app's own channels **by its public id or by
+name** (the opaque id from event payloads — never a raw document id); the bot may
+only post where it has been added. The response body is empty — read the HTTP
+status. Auth is the app's `apiToken` (rolled with `regenerateApiToken`).
 
 | Status | Meaning |
 | --- | --- |
@@ -111,7 +112,9 @@ HMAC-SHA256(signingSecret, "<timestamp>.<body>")
 The signed string is the timestamp and the raw JSON body joined by a `.`.
 
 Binding the timestamp into the signed string stops it being tampered
-independently. The payload is JSON:
+independently. The payload is JSON — every id in it (workspace, channel,
+conversation, member, message) is an opaque [public id](/docs/developer/public-ids),
+never a raw document id:
 
 ```json
 {
