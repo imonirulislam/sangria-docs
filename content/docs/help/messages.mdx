@@ -93,10 +93,10 @@ added it.
 
 Mentions notify the people you name:
 
-- **@person** — notifies that one person.
+- **@person** — notifies that one person, as long as they're in the channel.
 - **@user-group** — notifies the group's members who are in that channel.
-- **@channel**, **@everyone**, and **@here** — broadcasts that notify people in the
-  channel.
+- **@channel**, **@everyone**, and **@here** — broadcasts that notify the channel's
+  members (so they never reach someone who isn't in the channel).
 
 ## Threads
 
@@ -201,12 +201,43 @@ winner's trophy match the rest of the workspace rather than a fixed accent.
 
 ## Files & attachments
 
-Attach one or more files to a message. Everything shared in a channel is indexed in its
-**Files & links** tab, so you can find a file or link long after it scrolled away.
+Attach one or more files to a message with the **+** button, or by dragging them onto
+the composer. Everything shared in a channel is indexed in its **Files & links** tab, so
+you can find a file or link long after it scrolled away.
 
-Click an **image, video, or PDF** to open it in a full-size preview instead of
-downloading it. Any other file type downloads directly when clicked — hover a file to
-reveal a dedicated download button either way.
+### Inline previews
+
+Many files preview right in the message, so you rarely have to download just to take a
+look:
+
+- **Images** show as a thumbnail.
+- **PDFs** show their first page.
+- **Markdown** renders formatted — headings, bold, inline code, lists, and links.
+- **Code and text** (`.ts`, `.py`, `.json`, `.yaml`, `.sh`, and many more) show
+  syntax‑highlighted with line numbers and a **Show more** control to expand a long file.
+- **Word documents** (`.docx`) render their formatted content.
+
+Every preview has a **download** button on hover, and clicking it opens the full‑screen
+viewer.
+
+### The full‑screen viewer
+
+Click an image, video, PDF, Word document, or a markdown, text, or code file to open it
+full‑screen over a dimmed backdrop. Move your pointer over it to reveal the controls:
+
+- **Images** can be **zoomed** (the − / slider / +) and **rotated**.
+- **Download** the file, **open it in a new tab** (images, video, and PDFs), or **copy its
+  contents** (text and code).
+- The **…** menu adds **copy link**, **forward**, and file **info** — name, size, type,
+  and who shared it when.
+- The **thread** button opens that message's thread in a panel beside the file, so you can
+  discuss it without leaving the preview.
+
+### Downloads
+
+**Spreadsheets** (Excel), **presentations** (PowerPoint), legacy `.doc` files, and any
+other unrecognised file type **download** when you click them, rather than previewing. A
+hover download control is always available either way.
 
 ## Link previews
 
