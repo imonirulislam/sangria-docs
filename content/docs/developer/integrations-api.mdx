@@ -36,7 +36,8 @@ per app via the `incomingWebhook` limit.
 | --- | --- |
 | `200` | posted |
 | `400` | empty text |
-| `404` | missing token, unknown/inactive webhook or app, or a deleted channel |
+| `403` | the channel is archived |
+| `404` | missing token, unknown/inactive webhook or app, a deleted channel, or the bot was removed from the channel |
 | `429` | rate-limited |
 
 Routing lives in `convex/http.ts`; delivery in `convex/apps/webhook.ts`.
@@ -60,7 +61,8 @@ status. Auth is the app's `apiToken` (rolled with `regenerateApiToken`).
 | `200` | posted |
 | `400` | empty text, bad JSON, or missing `channel` |
 | `401` | missing or bad bearer token |
-| `404` | channel not found, or the app isn't in it |
+| `403` | the channel is archived |
+| `404` | channel not found, or the app isn't in it (including after its bot was removed from the channel) |
 | `429` | rate-limited |
 
 <Callout type="info">

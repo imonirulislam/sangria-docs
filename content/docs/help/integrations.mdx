@@ -22,6 +22,10 @@ and listing the channels it posts to.
 Adding or removing an app from a channel posts a system message in that channel, so
 members can see when a bot joins or leaves.
 
+Removing an app's bot from a channel's member list takes the app out of that channel
+completely: it can no longer post there or receive events from it. An admin can add it
+back later. Apps can't post into archived channels.
+
 ## Incoming webhooks
 
 An incoming webhook lets another tool push messages *into* Sangria.
