@@ -31,7 +31,9 @@ recipient work, so it stays **O(1)** no matter how large the channel is.
 `process` resolves recipients by `kind` and delivers to each. It handles two shapes:
 
 - **Bounded kinds** (`dm_message`, `thread_reply`) touch a small, known set of
-  recipients and finish in a single pass.
+  recipients and finish in a single pass. A `thread_reply` goes to the parent's
+  author and everyone who replied, but each is re-checked with `canReadResource`
+  first, so someone who has left the channel or DM stops getting the thread.
 - **Unbounded kinds** (`channel_message`, and channel `reaction`) fan out to a whole
   channel and are chunked.
 

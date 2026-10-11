@@ -91,6 +91,12 @@ be sidestepped by calling a query directly:
   called from both `requireMember` (writes / admin / channel access) and
   `assertCanRead` (reads). It throws a `ConvexError` with a code
   (`2FA_ENROLLMENT_REQUIRED` / `2FA_CHALLENGE_REQUIRED`) so the client can route.
+- **Soft reads** — queries that degrade instead of throwing get the same gate
+  through `getCallerMember` (use it instead of `getMember` for the caller's own
+  row in a public function) and `canReadResource`. Both return null/false while
+  the session owes a challenge. The gate only applies when the user being checked
+  is the signed-in caller, so scheduled jobs (no session) and checks about other
+  people (fan-out recipients, invitees) are never blocked by it.
 - **Policy** — `require2fa` is a per-workspace flag in `workspace_permissions`
   (default **on** for workspaces created after the feature; existing workspaces
   have no row and stay off, so nothing is retroactively locked out).
