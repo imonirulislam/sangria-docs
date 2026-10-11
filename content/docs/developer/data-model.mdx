@@ -50,6 +50,7 @@ a `workspaceId`), and enums that drive the validators come from
 | `drafts` | Auto-saved unsent drafts, one per target (channel / DM / thread). |
 | `scheduled_messages` | "Send later" messages, delivered by a cron at `scheduledFor`. |
 | `link_previews` | Cached OpenGraph preview data for external URLs, keyed by `url`. |
+| `storage_claims` | Who first put each uploaded blob to use (`storageId`, `userId`). `claimUpload` accepts only a fresh, unclaimed upload, so a known storage id can't be attached, set as an avatar or icon, or deleted through someone else's record. |
 
 ## Notifications
 
