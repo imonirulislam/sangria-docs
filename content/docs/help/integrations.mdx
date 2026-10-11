@@ -22,6 +22,10 @@ and listing the channels it posts to.
 Adding or removing an app from a channel posts a system message in that channel, so
 members can see when a bot joins or leaves.
 
+An app can read what's posted in the channels it's in, so you can only add an app to a
+channel you're in yourself. For the same reason, changing where an app sends its events
+requires being in every channel that app is in.
+
 Removing an app's bot from a channel's member list takes the app out of that channel
 completely: it can no longer post there or receive events from it. An admin can add it
 back later. Apps can't post into archived channels.
