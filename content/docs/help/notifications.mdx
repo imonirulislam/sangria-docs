@@ -74,6 +74,11 @@ Matching is case-insensitive, and you can add up to **50** words.
 Notifications can arrive as push on the web, desktop, iOS, Android, and installed PWAs.
 Each device subscribes separately, so you'll get push on the ones you're set up on.
 
+Push only reaches a device while you're signed in on it. Signing out (including
+**Sign out other sessions**) stops push to that device straight away; it resumes the
+next time you sign in there and open a workspace. If someone else signs in on the same
+browser, your push to it stops.
+
 <Cards>
   <Card title="Channels" href="/docs/help/channels" description="Set per-channel notification levels and mutes." />
   <Card title="Profile & status" href="/docs/help/profile-and-status" description="Your timezone drives quiet hours." />

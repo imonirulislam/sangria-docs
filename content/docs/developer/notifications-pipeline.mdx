@@ -74,7 +74,10 @@ When it passes, delivery writes an in-app `notifications` row and calls
 ## Push delivery — a retrying workpool
 
 `enqueueUserPush` looks up the user's active `push_subscriptions` and enqueues one
-task per device into `pushDeliveryPool` (a Convex Workpool). The pool caps
+task per device whose `sessionId` is still a live `authSessions` row (so signing out,
+signing out elsewhere or session expiry ends push to that device; the client re-saves
+its subscription on each workspace visit to bind it to the current session) into
+`pushDeliveryPool` (a Convex Workpool). The pool caps
 `maxParallelism` and retries failed deliveries with exponential backoff; dead
 subscriptions are deactivated rather than retried. Enqueuing happens inside the
 worker's transaction, so it's atomic with the in-app write.
