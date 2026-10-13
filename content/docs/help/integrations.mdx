@@ -47,10 +47,18 @@ This is a good fit for alerts from other tools — monitoring, CI, or a schedule
 that just needs to drop a line into one channel. Because the URL is tied to a single
 channel, you can add the app to more channels to get a separate URL for each.
 
+<Callout title="Copy the URL when it's shown">
+  A webhook URL is shown in full only once: when you add the app to the channel, or
+  when you regenerate the URL. After that you'll see just its last few characters,
+  because Sangria stores only a fingerprint of it. Lost it? Regenerate the URL. The old
+  one stops working immediately.
+</Callout>
+
 ## Bot API token
 
 An app also has a bearer **API token**. Use it to post to any channel the app is
-in, without a per-channel URL. Send a `POST` to `/api/messages` with an
+in, without a per-channel URL. Like webhook URLs, the token is shown in full only when it's
+generated or regenerated, so copy it then. Send a `POST` to `/api/messages` with an
 `Authorization` header and a JSON body naming the channel:
 
 ```

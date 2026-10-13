@@ -132,7 +132,9 @@ special-casing for Sangria.
 
 The `access_token` **is** the installed app's bot API token — the exact same
 credential the manually-created integrations flow already uses for
-`POST /api/messages`. Use it exactly as documented on the
+`POST /api/messages`. Each successful exchange mints a fresh token and
+revokes the previous one for that install, and Sangria stores only its hash, so keep
+the token you receive: it can't be fetched again. Use it exactly as documented on the
 [integrations API](/docs/developer/integrations-api#bot-api) page.
 
 | Status | `error` | Meaning |
