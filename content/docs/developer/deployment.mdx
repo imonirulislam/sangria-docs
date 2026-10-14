@@ -131,6 +131,11 @@ export CONVEX_SELF_HOSTED_ADMIN_KEY=<admin key from step 5>
 bunx convex env set JWT_PRIVATE_KEY -- "$(cat /tmp/sangria_jwt_private_key)"
 bunx convex env set JWKS -- "$(cat /tmp/sangria_jwks)"
 bunx convex env set SITE_URL https://sangria.imonirulislam.dev
+# Passkeys. The RP ID is the app's host; origins is a comma-separated allow-list of
+# exact scheme+host the app is served from. Unset, they default to localhost and
+# passkey sign-in fails in production.
+bunx convex env set WEBAUTHN_RP_ID sangria.imonirulislam.dev
+bunx convex env set WEBAUTHN_ORIGINS https://sangria.imonirulislam.dev
 bunx convex env set LIVEKIT_API_KEY <same as .env.prod>
 bunx convex env set LIVEKIT_API_SECRET <same as .env.prod>
 # web-push needs BOTH VAPID keys server-side (setVapidDetails). VAPID_PUBLIC_KEY
@@ -151,7 +156,8 @@ bunx convex env set RESEND_API_KEY <api key>
 
 # Social sign-in (all optional). A provider is only offered on the sign-in screen
 # when both of its vars are set, so set them in pairs or not at all. Register
-# <SITE_URL>/api/auth/callback/<provider-id> with each provider.
+# https://sangria-api.imonirulislam.dev/api/auth/callback/<provider-id> with each
+# provider (the callbacks are Convex HTTP routes, served on the -api host).
 bunx convex env set AUTH_GOOGLE_ID <client id>
 bunx convex env set AUTH_GOOGLE_SECRET <client secret>
 bunx convex env set AUTH_GITHUB_ID <client id>
@@ -211,6 +217,127 @@ values to pass when you build the image.
 On the server (`cd /opt/sangria/deploy`), set `IMAGE_TAG` in `.env.prod` to a
 previous tag and re-run
 `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`.
+
+## VM deploy
+
+The VM deploy is a second copy of the production stack on **its own VM** and its own
+domain (`<domain>` below). It shares no data or secrets with production. Its DNS is
+plain `A` records, with no Cloudflare proxy in front: browsers connect straight to Kong
+on the VM, which serves a **Let's Encrypt** certificate.
+
+The **Deploy (VM)** workflow (`.github/workflows/deploy-vm.yml`, run by hand) sets up and
+updates everything on the VM. The VM never holds the repo, only `deploy/` and images. On
+every run, the workflow:
+
+1. Installs Docker, certbot and rsync if they're missing.
+2. Writes `.env.prod` and the rendered Kong and LiveKit configs from the `vm` GitHub
+   environment, then copies them with `deploy/` to `/opt/sangria/deploy`.
+3. Issues a certificate for the six hostnames with Let's Encrypt's HTTP challenge, or
+   reuses it until 30 days before expiry. Kong owns port 80, so certbot stops the gateway
+   for the few seconds the challenge takes, which happens only on first issue and
+   renewal. Certbot's timer on the VM renews between deploys, using the same hooks.
+4. Builds the app image (`vm-<sha>`, never `latest`), then pulls and starts the stack:
+   app, docs, Convex backend and dashboard, Postgres (`sangria-db`), Redis (for
+   LiveKit), LiveKit and Kong.
+5. Derives the Convex admin key from the instance name and secret, sets the Convex
+   deployment env, and runs `convex deploy`.
+
+**Public hostnames:** `sangria`, `sangria-backend`, `sangria-api`, `sangria-livekit`,
+`sangria-backend-dashboard` and `sangria-docs` under `<domain>`. Postgres and Redis stay
+inside the Docker network.
+
+<Callout type="warn">
+  With no Cloudflare Access in front, the Convex dashboard's sign-in page is open to
+  anyone. It only works with the admin key, which is derived from `VM_INSTANCE_SECRET`,
+  so keep that secret safe.
+</Callout>
+
+### One-time setup
+
+These are the only manual steps.
+
+1. **Create the VM** (Ubuntu) and open `80/tcp`, `443/tcp`, `7881/tcp` and `7882/udp`.
+2. **Create the deploy user** with your SSH public key in `~/.ssh/authorized_keys` and
+   passwordless sudo. As that user, run
+   `echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/90-sangria-deploy`.
+3. **Add DNS records.** Add `A` records for the six hostnames above, all pointing at the
+   VM's IP. They must resolve before the first run, because Let's Encrypt checks each
+   one over port 80.
+4. **Generate the long-lived values once** and keep them. Changing some of them later
+   breaks things:
+   - `node scripts/generate-auth-keys.mjs` gives the JWT key and JWKS. Regenerating them
+     signs everyone out.
+   - `openssl rand -hex 32` gives the instance secret and the Postgres password. The
+     Postgres password only applies when the database volume is first created, so
+     changing it later locks the backend out of its own database.
+   - `openssl rand -base64 32` gives the app secrets key.
+   - `npx web-push generate-vapid-keys` gives the web-push key pair.
+   - `openssl rand -hex 8` gives the LiveKit key, and `openssl rand -hex 32` its secret.
+5. **Let this repo pull the docs image.** The docs image is published by the
+   `sangria-docs` repo. On its package page (GitHub → Packages → `sangria-docs` → Package
+   settings → Manage Actions access), add `imonirulislam/sangria` with the **Read** role.
+6. **Fill in the `vm` environment** (Settings → Environments → New environment).
+
+**Variables**
+
+| Name | Value |
+| --- | --- |
+| `VM_DOMAIN` | `<domain>` |
+| `VM_ADMIN_EMAIL` | Contact address for Let's Encrypt and web push |
+
+**Secrets** (all required)
+
+| Name | Value |
+| --- | --- |
+| `VM_DEPLOY_HOST`, `VM_DEPLOY_USER`, `VM_DEPLOY_SSH_KEY` | The VM's address, the deploy user, and that user's **private** key |
+| `VM_INSTANCE_SECRET` | Instance secret (the admin key is derived from it) |
+| `VM_POSTGRES_PASSWORD` | Postgres password |
+| `VM_LIVEKIT_API_KEY`, `VM_LIVEKIT_API_SECRET` | LiveKit key and secret |
+| `VM_JWT_PRIVATE_KEY`, `VM_JWKS` | From `generate-auth-keys.mjs` |
+| `VM_APP_SECRETS_KEY` | Encrypts app signing secrets at rest |
+| `VM_VAPID_PUBLIC_KEY`, `VM_VAPID_PRIVATE_KEY` | Web-push key pair |
+
+**Optional** (secret or variable; skipped when empty):
+
+- **Email:** `VM_EMAIL_PROVIDER` (`resend`, `ses` or `smtp`) and `VM_EMAIL_FROM`, plus the
+  provider's keys: `VM_RESEND_API_KEY`, or `VM_SES_REGION` / `VM_SES_ACCESS_KEY_ID` /
+  `VM_SES_SECRET_ACCESS_KEY`, or `VM_SMTP_HOST` / `VM_SMTP_PORT` / `VM_SMTP_USER` /
+  `VM_SMTP_PASSWORD`. Without email, password sign-up can't send its confirmation code.
+- **Sign-in providers:** `VM_AUTH_GOOGLE_ID` / `_SECRET`, `VM_AUTH_GITHUB_ID` / `_SECRET`,
+  `VM_AUTH_GITLAB_ID` / `_SECRET`, `VM_AUTH_MICROSOFT_ENTRA_ID_ID` / `_SECRET` /
+  `_TENANT_ID`, `VM_AUTH_APPLE_ID` / `_SECRET`. Register
+  `https://sangria-api.<domain>/api/auth/callback/<provider>` with each.
+- **Android push:** `VM_FCM_SERVICE_ACCOUNT_JSON`.
+- **Convex concurrency:** `VM_MAX_CONCURRENT_QUERIES`, `_MUTATIONS`, `_V8_ACTIONS` and
+  `_NODE_ACTIONS` (variables). The defaults, 32 / 24 / 24 / 12, suit 8 cores and 16 GB.
+  Raise them only if `docker stats` shows spare CPU and RAM while requests queue.
+
+`NEXT_PUBLIC_APP_NAME` is a shared repo-level variable. Everything else is derived from
+`VM_DOMAIN`. No registry token is needed: the workflow pulls the private images with
+its own short-lived `GITHUB_TOKEN` and logs the VM out again straight after.
+
+The `VM_` prefix is deliberate: GitHub falls back to a repo-level secret when an
+environment one is missing, so reusing production's names could send a VM deploy to the
+production server. The first job stops the run if a
+required value is missing.
+
+### Deploying and rolling back
+
+Run **Actions → Deploy (VM) → Run workflow**. The first run does the whole setup; later
+runs only change what's different.
+
+To roll back, re-run the workflow from an earlier commit. To roll back by hand, set
+`IMAGE_TAG` in `/opt/sangria/deploy/.env.prod` on the VM to an earlier `vm-<sha>` tag and
+run `sudo docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`. The next
+workflow run overwrites `.env.prod` again.
+
+### Troubleshooting
+
+- **Sign-up failed to send its code.** The account is created before the email goes
+  out, so trying to sign up again says the email is taken. Use **Sign in** with the
+  same email and password instead; it sends a fresh code.
+- **Admin key by hand.** On the VM, in `/opt/sangria/deploy`, run
+  `sudo docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend ./generate_admin_key.sh`.
 
 ## Inspecting the gateway (Kong Manager)
 
