@@ -333,9 +333,10 @@ workflow run overwrites `.env.prod` again.
 
 ### Troubleshooting
 
-- **Sign-up failed to send its code.** The account is created before the email goes
-  out, so trying to sign up again says the email is taken. Use **Sign in** with the
-  same email and password instead; it sends a fresh code.
+- **Sign-up failed to send its code.** Usually email isn't configured, or `EMAIL_FROM`
+  isn't on a domain the provider has verified. Fix that, then sign up again: the retry
+  clears the unconfirmed account. **Sign in** with the same email and password also
+  works and sends a fresh code.
 - **Admin key by hand.** On the VM, in `/opt/sangria/deploy`, run
   `sudo docker compose --env-file .env.prod -f docker-compose.prod.yml exec backend ./generate_admin_key.sh`.
 
