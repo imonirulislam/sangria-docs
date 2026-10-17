@@ -11,8 +11,7 @@ How to get Sangria running locally and ship a change that passes review.
 | --- | --- |
 | `convex/` | The backend, grouped by domain: `workspace`, `messaging`, `notifications`, `huddles`, `apps`, `presence`, `account`, and `shared` (the reusable helpers). |
 | `src/` | The Next.js frontend — feature folders plus the App Router under `src/app`. |
-| `desktop/` | The Electron shell. |
-| `mobile/` | The Capacitor (iOS / Android) shell. |
+| `native/` | Submodule of the private `sangria-native` repo: the Electron (`desktop/`) and Capacitor iOS / Android (`mobile/`) shells. Run `git submodule update --init` to check it out; the app builds without it. |
 | `sangria-docs/` | These docs — a separate repo from the app. |
 
 ## Local setup

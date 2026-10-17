@@ -38,7 +38,8 @@ Production deploys are manual; there is no deploy workflow. A release is three s
 
 1. **Build and push the app image.** Build the Dockerfile `production` target with
    the `NEXT_PUBLIC_*` values as build args, tag it
-   `ghcr.io/imonirulislam/sangria-app:<tag>`, and push it.
+   `ghcr.io/imonirulislam/sangria-app:<tag>`, and push it. The content security
+   policy is built from these values (see [Operational notes](#operational-notes)).
 2. **Restart the stack on the server.** In `/opt/sangria/deploy`, set `IMAGE_TAG` in
    `.env.prod` to the new tag, render the Kong and LiveKit configs, then pull and
    start:
@@ -353,6 +354,16 @@ editing the YAML. The same listeners can be exposed in prod behind Cloudflare Ac
 if you want the console there too.
 
 ## Operational notes
+
+- **Content security policy:** every page gets a per-request nonce policy and
+  `X-Frame-Options: DENY` (`src/lib/csp.ts`, attached in `src/proxy.ts`). Browsers
+  may connect only to the app itself, `NEXT_PUBLIC_CONVEX_URL` and
+  `NEXT_PUBLIC_LIVEKIT_URL` (https and wss), and the sign-in geo lookup. Those two
+  URLs are baked in at **build time**, so a wrong build arg makes the app fail to
+  connect without an obvious error; the console shows a "Content Security Policy"
+  violation naming the blocked URL. Images may come from any https host because link
+  previews load them straight from the linked site. API routes and static files
+  (service worker, workers, `offline.html`) don't get this policy.
 
 - **Postgres backups** are yours to own now — schedule a `pg_dump` (or snapshot the
   `pg_data` volume).

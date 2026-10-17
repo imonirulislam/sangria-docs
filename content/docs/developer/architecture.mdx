@@ -13,10 +13,12 @@ media. Desktop and mobile are the same deployed web app wrapped in native shells
 | **Frontend** | Next.js 16 (App Router) + React 19. Local state in `jotai`; URL state in `nuqs`; Tailwind CSS. |
 | **Backend** | [Convex](https://convex.dev) (self-hosted locally): the schema, queries, mutations, actions, HTTP routes, scheduled functions, crons, and components. |
 | **Realtime media** | [LiveKit](https://livekit.io) rooms power huddles; membership is a projection of LiveKit's webhook events. |
-| **Shells** | Electron (desktop), Capacitor (iOS/Android), and a PWA — each wraps the deployed web app rather than reimplementing it. |
+| **Shells** | Electron (desktop), Capacitor (iOS/Android), and a PWA — each wraps the deployed web app rather than reimplementing it. The Electron and Capacitor shells live in their own repo, `sangria-native` (the app's `native/` submodule). |
 
-The shells share one codebase. Anything platform-specific (native notifications,
-deep links) is a thin adapter over the same Convex API the web app calls.
+The shells load the same web app. Anything platform-specific (native notifications,
+deep links) is a thin adapter over the same Convex API the web app calls. The bridge
+the web app relies on (`window.electronAPI` channels and Capacitor plugins) is listed
+in `BRIDGE.md` in `sangria-native`; change both repos together.
 
 ## Convex primitives
 
