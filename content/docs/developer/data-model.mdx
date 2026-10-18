@@ -115,7 +115,7 @@ a `workspaceId`), and enums that drive the validators come from
 | `totp_credentials` | One per user: TOTP secret, hashed recovery codes, lockout counter, replay guard. |
 | `webauthn_credentials` | One per registered passkey (passwordless sign-in): public key, signature counter, transports, label. |
 | `webauthn_challenges` | Short-TTL passkey **registration** challenges, keyed by user; consumed on verify, swept by cron. |
-| `webauthn_login_challenges` | Short-TTL passkey **sign-in** challenges (usernameless, so keyed by the challenge value, not a user); consumed by verifyLogin. |
+| `webauthn_login_challenges` | Passkey **sign-in** challenges already used to sign in, kept for their 5-minute TTL so a replay is refused. Challenges themselves are signed, not stored. |
 | `twofa_session_state` | Marks an auth session as having cleared the 2FA gate (via TOTP, or created by a passkey sign-in). |
 | `account_reauth_state` | Short-lived per-session "step-up" marker: the session re-confirmed a password / TOTP just before a sensitive change (adding a passkey). |
 

@@ -149,22 +149,25 @@ client's origin is never trusted.
   back to the signed-in session (documented residual — enabling 2FA closes it).
 - **Sign-in** (`convex/account/passkeysLogin.ts`) — `loginOptions` is
   **unauthenticated** and usernameless (empty `allowCredentials`, so the browser
-  offers any discoverable passkey); it stores a `webauthn_login_challenges` row
-  (no user yet — looked up later by the signed challenge value). The client runs
+  offers any discoverable passkey). Its challenge is **signed, not stored**: a
+  nonce and timestamp with an HMAC keyed from `APP_SECRETS_KEY`, so minting one
+  writes nothing and needs no rate limit anyone could exhaust. The client runs
   the ceremony and calls `signIn("passkey", { response })`. The `passkey`
   `ConvexCredentials` provider (`convex/auth.ts`) calls the internal `verifyLogin`,
-  which verifies the assertion (UV required), advances the signature counter (with
+  which checks the challenge's signature and 5-minute age, refuses one already used,
+  verifies the assertion (UV required), records the challenge as used, advances
+  the signature counter (with
   a clone check), **creates the auth session itself and marks it 2FA-cleared**,
   then returns `{ userId, sessionId }` — so `@convex-dev/auth` mints tokens for a
   session that already satisfies the gate. A passkey login therefore signs in
   straight through, even in a workspace that requires 2FA, because unlocking the
   passkey already proved device + user. Failures return `null` (opaque — the
   client never learns whether a credential exists).
-- **Cleanup** — short-TTL challenge rows (both tables) are consumed on verify and
-  swept hourly by `pruneStaleChallenges`.
+- **Cleanup** — registration challenges and used sign-in challenges are swept
+  hourly by `pruneStaleChallenges` once past the 5-minute TTL.
 
-Rate limits: `passkeyRegister` (per user) and `passkeyLogin` (a single coarse
-global bucket, since sign-in is unauthenticated — see the DoS note in code).
+Rate limits: `passkeyRegister` (per user). Sign-in has none: it stores nothing until
+a sign-in succeeds.
 
 ## How a message flows
 
