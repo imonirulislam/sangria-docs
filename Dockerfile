@@ -7,7 +7,9 @@ RUN bun run build
 
 # Runner: Node serves the standalone bundle. `output: 'standalone'` does NOT
 # include .next/static or public/, so copy them into place explicitly.
-FROM node:22-slim AS runner
+# Pinned to an exact patch release so a Node.js security fix is guaranteed; bump
+# with each security release (24.22.1: October 2026, CVE-2026-111497).
+FROM node:24.22.1-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3002
