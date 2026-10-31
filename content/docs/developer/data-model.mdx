@@ -43,7 +43,8 @@ a `workspaceId`), and enums that drive the validators come from
 
 | Table | Purpose |
 | --- | --- |
-| `messages` | The message: `body` (a Quill delta), `searchText` (plain-text projection for search), `attachments`, `channelId` or `conversationId`, `parentMessageId` (threads), `systemGenerated`, `forwardedFrom`, `hiddenUnfurls`, and huddle fields. |
+| `messages` | The message: `body` (a Quill delta), `searchText` (plain-text projection for search), `attachments`, `channelId` or `conversationId`, `parentMessageId` (threads), `systemGenerated`, `forwardedFrom`, `hiddenUnfurls`, and huddle fields. A thread's parent also stores its summary: `replyCount`, `lastReplyAt`, `lastReplyId`, `replierCount` and `recentReplierIds`. |
+| `thread_participants` | One row per thread and member who started or replied to it (`replyCount`, `lastActivityAt`). Its `by_member_activity` index pages the Threads view. |
 | `reactions` | An emoji reaction on a message (`value`). |
 | `pinned_messages` | A message pinned in a channel/conversation (channel + conversation ids denormalized from the message). |
 | `saved_messages` | A "Later" item: a saved message, a message reminder, or a standalone reminder (`status`, `remindAt`, `note`). |
@@ -51,6 +52,25 @@ a `workspaceId`), and enums that drive the validators come from
 | `scheduled_messages` | "Send later" messages, delivered by a cron at `scheduledFor`. |
 | `link_previews` | Cached OpenGraph preview data for external URLs, keyed by `url`. |
 | `storage_claims` | Who first put each uploaded blob to use (`storageId`, `userId`). `claimUpload` accepts only a fresh, unclaimed upload, so a known storage id can't be attached, set as an avatar or icon, or deleted through someone else's record. |
+
+### Thread metadata
+
+Reading a message never counts its thread's replies. `convex/messaging/threadMetadata.ts`
+keeps the summary on the parent and the `thread_participants` rows in step with every
+reply and delete:
+
+- **A new reply** updates the parent, the replier's row and the starter's row inline.
+  Edits don't count as activity.
+- **Everyone else's** `lastActivityAt` is bumped by `bumpThreadActivity`, a scheduled
+  job that pages through the thread's rows. A burst of replies schedules one run
+  (`threadBumpPending`, about 2s later). The job re-checks access without a session and
+  deletes the row of anyone who can no longer read the thread.
+- **A thread with no summary yet** (older data) is rebuilt by a background job, not in
+  the sender's request.
+
+`getUserThreads` reads only `thread_participants`, so it has no fallback for threads
+without rows. After deploying this to a deployment with existing threads, run the
+backfill once — see [Deployment](/docs/developer/deployment).
 
 ## Notifications
 
