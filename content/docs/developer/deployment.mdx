@@ -55,6 +55,14 @@ Production deploys are manual; there is no deploy workflow. A release is three s
    `CONVEX_SELF_HOSTED_ADMIN_KEY` pointing at production, run `bunx convex deploy -y`.
    New functions return 404 until this runs.
 
+4. **Run any one-off backfill the release needs**, right after the push. The thread
+   metadata release needs one, or existing threads are missing from the Threads view
+   until they get a new reply. It is idempotent and schedules its own batches:
+
+   ```bash
+   bunx convex run messaging/threadMetadata:backfillThreadMetadata
+   ```
+
 The docs image is built by its own workflow in the `sangria-docs` repo
 (`.github/workflows/build-image.yml`) and pulled by the app's prod compose.
 
