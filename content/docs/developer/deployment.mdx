@@ -63,6 +63,20 @@ Production deploys are manual; there is no deploy workflow. A release is three s
    bunx convex run messaging/threadMetadata:backfillThreadMetadata
    ```
 
+   The channel unread release needs one too. It fills `channel_activity`, carries each
+   member's current unread channels into `lastViewed`, then marks the old unread
+   `channel_message` rows read so they stop crowding the dock badge:
+
+   ```bash
+   bunx convex run messaging/channelActivity:backfillChannelActivity
+   ```
+
+   Run it **once**. After the last phase there are no unread rows left to read from,
+   so a second run would mark channels that are still unread as read. Messages sent
+   between the push and the backfill may not show their channel in bold. The release
+   also adds an index on `notifications`, the largest table, so the push may take a
+   while.
+
 The docs image is built by its own workflow in the `sangria-docs` repo
 (`.github/workflows/build-image.yml`) and pulled by the app's prod compose.
 
@@ -341,6 +355,12 @@ run `sudo docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`.
 workflow run overwrites `.env.prod` again.
 
 ### Troubleshooting
+
+- **The VM only allows HTTPS from inside its network.** The workflow doesn't need 443
+  from GitHub's runners: after the stack starts, it opens an SSH tunnel to the VM's
+  gateway and points `sangria-backend.<domain>` at it, so the Convex env and deploy
+  steps only need SSH. Users still need 443, and certificate renewal needs 80 open to
+  Let's Encrypt.
 
 - **Sign-up failed to send its code.** Usually email isn't configured, or `EMAIL_FROM`
   isn't on a domain the provider has verified. Fix that, then sign up again: the retry

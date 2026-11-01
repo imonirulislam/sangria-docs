@@ -26,6 +26,10 @@ It inserts a single `notification_events` row with `status: "pending"` and sched
 `internal.notifications.notificationEvents.process`. The mutation does no
 recipient work, so it stays **O(1)** no matter how large the channel is.
 
+For a `channel_message` it also calls `noteChannelMessage`, which moves the channel's
+`channel_activity.lastMessageAt` forward and the sender's `lastViewed` with it. That is
+all channel unread state needs — see [Channel unread](#channel-unread).
+
 ## Worker — resolve, deliver, chunk
 
 `process` resolves recipients by `kind` and delivers to each. It handles two shapes:
@@ -34,8 +38,11 @@ recipient work, so it stays **O(1)** no matter how large the channel is.
   recipients and finish in a single pass. A `thread_reply` goes to the thread's
   participants (its `thread_participants` rows), but each is re-checked with `canReadResource`
   first, so someone who has left the channel or DM stops getting the thread.
-- **Unbounded kinds** (`channel_message`, and channel `reaction`) fan out to a whole
-  channel and are chunked.
+- **Unbounded kinds** (`channel_message`) fan out to a whole channel and are chunked.
+- **`reaction`** notifies one person: the message's author, through
+  `deliverReactionToAuthor`. Nobody is notified when you react to your own message, and
+  the author is re-checked first (`canReadResource`, and a muted DM), so someone who
+  left a private channel isn't pinged.
 
 **@mentions run once, up front.** Before any chunking, if `!event.extrasDone` and the
 kind isn't `reaction`, the worker calls `sendMentionNotifications` to notify anyone
@@ -52,6 +59,9 @@ final page it sets `status: "done"`. Within each recipient of a `channel_message
   the worker reads their `notification_preferences.highlightWords` and calls
   `matchHighlightWord`. A hit produces a mention-class `keyword` notification **in
   place of** that recipient's generic `channel_message` row.
+- **The generic `channel_message` row is written already read.** It still drives push
+  and the desktop banner, but unread state comes from `channel_activity`, not from
+  these rows.
 
 ## `shouldDeliver` — the single gate
 
@@ -70,6 +80,21 @@ before anything is written. In one place it:
 
 When it passes, delivery writes an in-app `notifications` row and calls
 `enqueueUserPush`.
+
+## Channel unread
+
+A channel is unread for a member when its `channel_activity.lastMessageAt` is newer than
+their `channel_members.lastViewed`. `getUnreadChannelIds` returns that set for the
+sidebar, which shows those channels in bold with no count. Opening a channel
+(`markAsReadForChannel`) moves `lastViewed` forward. Because it doesn't depend on a
+notification row, muted, mentions-only and quiet-hours channels track unread too.
+
+`channel_activity` is updated by root channel messages, thread replies also sent to
+the channel, huddle starts and the Mattermost import. A plain thread reply doesn't
+make the channel unread.
+
+The dock badge (`globalUnreadCount`) counts only unread `message`, `mention`,
+`keyword` and `thread_reply` rows.
 
 ## Push delivery — a retrying workpool
 

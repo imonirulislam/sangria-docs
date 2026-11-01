@@ -30,7 +30,8 @@ a `workspaceId`), and enums that drive the validators come from
 | Table | Purpose |
 | --- | --- |
 | `channels` | A channel: `name`, `isPrivate`, `isDefault`, `description`, `topic`. |
-| `channel_members` | Membership + per-channel settings: `role`, `notificationPreference` (`all` / `mentions` / `none`), `isMuted`, `mutedUntil`, `isActive`. |
+| `channel_members` | Membership + per-channel settings: `role`, `notificationPreference` (`all` / `mentions` / `none`), `isMuted`, `mutedUntil`, `isActive`, and `lastViewed` (when the member last read the channel). |
+| `channel_activity` | One row per channel with `lastMessageAt`. A channel is unread when this is newer than the member's `lastViewed`. It's a separate table so a new message doesn't re-run every query that reads the channel. |
 
 ## Direct messages
 
@@ -76,7 +77,7 @@ backfill once — see [Deployment](/docs/developer/deployment).
 
 | Table | Purpose |
 | --- | --- |
-| `notifications` | An in-app notification row for a user (`type`, `content`, `isRead`). |
+| `notifications` | An in-app notification row for a user (`type`, `content`, `isRead`). `channel_message` rows are written already read: they drive push and the desktop banner, not unread state. |
 | `notification_events` | The fan-out **outbox** — one row per triggering message/reaction; a worker drains it. See [Notifications pipeline](/docs/developer/notifications-pipeline). |
 | `notification_preferences` | Per-user, per-workspace preferences: categories, quiet hours (+ timezone), and `highlightWords`. |
 | `push_subscriptions` | One web-push endpoint per device for a user in a workspace. |
