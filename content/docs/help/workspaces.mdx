@@ -64,9 +64,19 @@ include:
 - **Whether members can delete their own messages.**
 - **Who can use @channel, @everyone and @here** — everyone, members but not guests,
   or only admins. Apps can always use them.
-- **Require two-factor authentication** — when on, every member must set up 2FA
-  before they can use the workspace. New workspaces have this on by default. See
+- **Require two-factor authentication**: when on, every member must set up 2FA.
+  Members who haven't yet get a **grace period** to do it: none, 24 hours,
+  2 days (the default), 7 days or 14 days. It counts from when you turned the
+  requirement on, or from when a member was added if that's later. After it ends,
+  they can't use the workspace until they set up 2FA. The **Members** page shows
+  when each member is due. New workspaces have this on by default. See
   [Account & security](/docs/help/account-and-security#two-factor-authentication).
+
+<Callout title="Changing the 2FA requirement">
+  While 2FA is required, only an admin who has 2FA on can turn the requirement off
+  or change the grace period. Workspaces that required 2FA before grace periods
+  existed keep enforcing it immediately until an admin picks a period.
+</Callout>
 
 <Callout title="Where policies live">
   Configure these under **Customize workspace** (admin/owner only). Changing a policy
