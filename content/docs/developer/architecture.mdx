@@ -105,9 +105,10 @@ be sidestepped by calling a query directly:
 - **Grace period** — `require2faSince` (set when the requirement is switched on,
   cleared when it's switched off) and `require2faGraceHours` (0, 24, 48, 168 or
   336; unset means 48). An unenrolled member's deadline is
-  `max(require2faSince, member._creationTime) + grace`, computed by `twofaDeadline`
-  in `convex/shared/twofa.ts`. It uses `_creationTime`, not `joinedAt`, because
-  members can edit their own `joinedAt`. A required row with neither field (from
+  `max(require2faSince, member.reactivatedAt ?? member._creationTime) + grace`,
+  computed by `twofaDeadline` in `convex/shared/twofa.ts`. `reactivatedAt` is
+  set only by `members.reactivate`, so a returning member gets a fresh period. It
+  never uses `joinedAt`, because members can edit their own. A required row with neither field (from
   before grace periods) enforces immediately. `twofaShortfall` lets the member
   through until the deadline. `account.twofa.gateState` returns the `deadline` so
   the client can show the reminder and flip to enrollment on its own clock: a
