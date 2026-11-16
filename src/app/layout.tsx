@@ -1,6 +1,7 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import { Inter, Fraunces } from 'next/font/google';
+import { headers } from 'next/headers';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -14,7 +15,9 @@ const fraunces = Fraunces({
   display: 'swap',
 });
 
-export default function Layout({ children }: LayoutProps<'/'>) {
+// Reading the request makes every page render per request, which the CSP nonce needs.
+export default async function Layout({ children }: LayoutProps<'/'>) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html
       lang="en"
@@ -22,7 +25,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       suppressHydrationWarning
     >
       <body className="flex flex-col min-h-screen">
-        <RootProvider>{children}</RootProvider>
+        <RootProvider theme={{ nonce }}>{children}</RootProvider>
       </body>
     </html>
   );
