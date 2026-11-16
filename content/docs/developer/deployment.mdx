@@ -198,6 +198,23 @@ bunx convex env set AUTH_MICROSOFT_ENTRA_ID_TENANT_ID <directory id>
 bunx convex env set AUTH_APPLE_ID <services id>
 bunx convex env set AUTH_APPLE_SECRET <generated JWT>
 
+# Who can sign up (all optional; unset = anyone can sign up and create workspaces).
+# Checked on the server only when an account would be created — signing in to an
+# existing account is never blocked. An unrecognised value falls to the strictest
+# option, so a typo can't reopen sign-up.
+#   SIGNUP_MODE: open (default) | invite-only (needs a pending email invite) | closed
+#   SIGNUP_ALLOWED_DOMAINS: in open mode only these domains can sign up; in
+#     invite-only they skip the invite. An invite always gets someone in.
+#   AUTH_PASSWORD_SIGNUP=false: social sign-up only.
+#   WORKSPACE_CREATION=closed: only the first workspace on a fresh install.
+# Social sign-ins only match an invite or domain when the provider verified the
+# address. Microsoft does so only with the optional `xms_edov` ID-token claim
+# added to the app registration (Token configuration → Add optional claim).
+bunx convex env set SIGNUP_MODE invite-only
+bunx convex env set SIGNUP_ALLOWED_DOMAINS acme.com,acme.co.uk
+bunx convex env set AUTH_PASSWORD_SIGNUP false
+bunx convex env set WORKSPACE_CREATION closed
+
 # Native push for the mobile apps. Android delivers via FCM HTTP v1 using the
 # Firebase service-account JSON — paste the whole file (it's a secret, never commit
 # it). iOS/APNs is scaffolded but not wired, so leave APNS_AUTH_KEY unset for now.
@@ -330,6 +347,9 @@ These are the only manual steps.
   `VM_AUTH_GITLAB_ID` / `_SECRET`, `VM_AUTH_MICROSOFT_ENTRA_ID_ID` / `_SECRET` /
   `_TENANT_ID`, `VM_AUTH_APPLE_ID` / `_SECRET`. Register
   `https://sangria-api.<domain>/api/auth/callback/<provider>` with each.
+- **Who can sign up** (variables): `VM_SIGNUP_MODE`, `VM_SIGNUP_ALLOWED_DOMAINS`,
+  `VM_AUTH_PASSWORD_SIGNUP` and `VM_WORKSPACE_CREATION`. Clearing one later doesn't
+  unset it on the deployment; run `bunx convex env remove <name>` to go back to the default.
 - **Android push:** `VM_FCM_SERVICE_ACCOUNT_JSON`.
 - **Convex concurrency:** `VM_MAX_CONCURRENT_QUERIES`, `_MUTATIONS`, `_V8_ACTIONS` and
   `_NODE_ACTIONS` (variables). The defaults, 32 / 24 / 24 / 12, suit 8 cores and 16 GB.
